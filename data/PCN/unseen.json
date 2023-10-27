@@ -1,0 +1,82 @@
+[
+    {
+        "taxonomy_id": "02801938",
+        "taxonomy_name": "basket",
+        "test": [
+            "b02c92fb423f3251a6a37f69f7f8f4c7",
+            "b37a77cec9643bae5257c4bca2a1f0"
+        ],
+        "train": [
+            "b02c92fb423f3251a6a37f69f7f8f4c7",
+            "b37a77cec9643bae5257c4bca2a1f0"
+        ],
+        "val": [
+            "b02c92fb423f3251a6a37f69f7f8f4c7",
+            "b37a77cec9643bae5257c4bca2a1f0"
+        ]
+    },
+    {
+        "taxonomy_id": "02880940",
+        "taxonomy_name": "bowl",
+        "test": [
+            "b195dbe537993945e4e346ee2650d150",
+            "ce905d4381d4daf65287b12a83c64b85"
+        ],
+        "train": [
+            "b195dbe537993945e4e346ee2650d150",
+            "ce905d4381d4daf65287b12a83c64b85"
+        ],
+        "val": [
+            "b195dbe537993945e4e346ee2650d150",
+            "ce905d4381d4daf65287b12a83c64b85"
+        ]
+    },
+    {
+        "taxonomy_id": "03085013",
+        "taxonomy_name": "keyboard",
+        "test": [
+            "7e984643df66189454e185afc91dc396",
+            "d22bad5e72b815c41aea59cd55c902b0"
+        ],
+        "train": [
+            "7e984643df66189454e185afc91dc396",
+            "d22bad5e72b815c41aea59cd55c902b0"
+        ],
+        "val": [
+            "7e984643df66189454e185afc91dc396",
+            "d22bad5e72b815c41aea59cd55c902b0"
+        ]
+    },
+    {
+        "taxonomy_id": "03938244",
+        "taxonomy_name": "pillow",
+        "test": [
+            "89fd3acbd34e72106a6cca39468798a8",
+            "fce7f95d023ac364402d272d6d981f21"
+        ],
+        "train": [
+            "89fd3acbd34e72106a6cca39468798a8",
+            "fce7f95d023ac364402d272d6d981f21"
+        ],
+        "val": [
+            "89fd3acbd34e72106a6cca39468798a8",
+            "fce7f95d023ac364402d272d6d981f21"
+        ]
+    },
+    {
+        "taxonomy_id": "04225987",
+        "taxonomy_name": "skateboard",
+        "test": [
+            "98222a1e5f59f2098745e78dbc45802e",
+            "f52d56b5f81f1258c70ae17ca06472e1"
+        ],
+        "train": [
+            "98222a1e5f59f2098745e78dbc45802e",
+            "f52d56b5f81f1258c70ae17ca06472e1"
+        ],
+        "val": [
+            "98222a1e5f59f2098745e78dbc45802e",
+            "f52d56b5f81f1258c70ae17ca06472e1"
+        ]
+    }
+]

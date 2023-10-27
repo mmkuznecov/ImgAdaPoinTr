@@ -1,0 +1,7 @@
+NAME: PCN
+CATEGORY_FILE_PATH: data/PCN/my_data.json
+N_POINTS: 16384
+N_RENDERINGS: 8
+PARTIAL_POINTS_PATH: /home/jovyan/GCN_denoiser/mesh-inversion/output_mesh/%s/%s/%s/%shalf_norm_no_fix.pcd
+COMPLETE_POINTS_PATH: /home/jovyan/GCN_denoiser/mesh-inversion/output_mesh/%s/%s/%s/no_fix.pcd
+CARS: FALSE

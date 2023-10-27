@@ -1,0 +1,33 @@
+[
+    {
+        "taxonomy_id": "pointclouds",
+        "taxonomy_name": "airplane",
+        "test": [
+            "example",
+            "example_120",
+            "example_630",
+            "example_800",
+            "example_900",
+            "11506b96d41f7d3dd7c4a943f33e0384",
+            "1236ae59815ff2408e30bdcd3135786b",
+            "59fd3d1409c0ee2e47bc3701b998a7d5",
+            "6b9806cf8a7f2120dd141480e2c154d3",
+            "eacd6b88c0a9d9fb84b1aa0ed7e58be1",
+            "f4427ee23d4d51fabbf98dcec5f11066"
+        ],
+        "train": [
+            "example",
+            "example_120",
+            "example_630",
+            "example_800",
+            "example_900"
+        ],
+        "val": [
+            "example",
+            "example_120",
+            "example_630",
+            "example_800",
+            "example_900"
+        ]
+    }
+]

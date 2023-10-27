@@ -1,0 +1,7 @@
+NAME: PCN
+CATEGORY_FILE_PATH: data/PCN/half_data.json
+N_POINTS: 16384
+N_RENDERINGS: 8
+PARTIAL_POINTS_PATH: /home/jovyan/vchopuryan/ModelsResults/PointCompletion/PCNDataset/%s/%s/%s/%s_half_2048.pcd
+COMPLETE_POINTS_PATH: /home/jovyan/vchopuryan/ModelsResults/PointCompletion/PCNDataset/%s/%s/%s/complete.pcd
+CARS: FALSE

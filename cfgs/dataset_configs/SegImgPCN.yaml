@@ -1,0 +1,8 @@
+NAME: SegImgPCN
+CATEGORY_FILE_PATH: /home/jovyan/datasets/ImgPCN/PCN.json
+N_POINTS: 16384
+N_RENDERINGS: 8
+PARTIAL_POINTS_PATH: /home/jovyan/datasets/ImgPCN/%s/partial/%s/%s/%02d.pcd
+COMPLETE_POINTS_PATH: /home/jovyan/datasets/ImgPCN/%s/complete/%s/%s/PCN/%s.pcd
+IMG_PATH: /home/jovyan/datasets/ImgPCN/%s/complete/%s/%s/ShapeNetCoreV1/projections/%02d.png
+CARS: FALSE
