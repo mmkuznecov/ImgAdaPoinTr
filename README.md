@@ -30,8 +30,7 @@ In corresponding directory.
 
 ### Dataset
 
-ImgPCN dataset can be accessed via [link](https://n-ws-z5wzc-pd11.s3pd11.sbercloud.ru/b-ws-z5wzc-pd11-irp/datasets/ImgPCN/ImgPCN.tar.gz?AWSAccessKeyId=u-ws-z5wzc-pd11-yjo&Signature=udIvocnqf2EYsWFNqa8%2FXcdpS3g%3D&Expires=1698403154).
-
+ImgPCN dataset can be accessed via [link](https://sc.link/vbpNl).
 
 ### Run
 
