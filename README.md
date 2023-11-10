@@ -93,13 +93,12 @@ bash ./scripts/train.sh 0 --config ./cfgs/ImgPCN_models/ImgResNetEncAdaPoinTrVar
 
 To eval:
 
+
 ```bash
 bash ./scripts/test.sh 0 --ckpts experiments/ImgResNetEncAdaPoinTrVariableLoss/ImgPCN_models/train_ImgResNetEncAdaPoinTrVariableLoss_easy/ckpt-best.pth --config ./cfgs/ImgPCN_models/ImgResNetEncAdaPoinTrVariableLoss.yaml --exp_name test
 ```
-<<<<<<< HEAD
 
 ## Acknowledgements
 
 Our code is inspired by [AdaPoinTr](https://github.com/yuxumin/PoinTr) and [XMFnet](https://github.com/diegovalsesia/XMFnet).
-=======
->>>>>>> 8b841341d3ae0fb33c6735a00deb60ba33dae1c7
+
