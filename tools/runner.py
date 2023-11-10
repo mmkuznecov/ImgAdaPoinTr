@@ -63,7 +63,7 @@ def run_net(args, config, train_writer=None, val_writer=None):
     dataset_name = config.dataset.train._base_.NAME
     if 'SegImgPCN' in dataset_name:
         print('Start load Segmentator weights')
-        state_dict = torch.load("/home/jovyan/vchopuryan/GDANet/checkpoints/GDANet/best_insiou_model.pth",
+        state_dict = torch.load(args.gdanet_w,
                                 map_location=torch.device('cpu'))['model']
 
         new_state_dict = OrderedDict()

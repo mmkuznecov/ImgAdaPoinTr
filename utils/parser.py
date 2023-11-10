@@ -9,6 +9,12 @@ def get_args():
         type = str, 
         default='./cfgs/PCN_models/AdaPoinTr_for_my_data.yaml',
         help = 'yaml config file')
+
+    parser.add_argument(
+        '--gdanet_w', 
+        type = str, 
+        default='./pretrained/GDANet_best_insiou_model.pth',
+        help = 'path to GDANet weights')
     parser.add_argument(
         '--launcher',
         choices=['none', 'pytorch'],

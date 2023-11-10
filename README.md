@@ -75,12 +75,12 @@ For each object we provide 24 renders. Examples of renders:
 | AdaPoinTr              | 6.528  | 3.681    | 8.823   | 7.476  | 6.850  | 5.478  | 8.353  | 5.801  | 5.763      |
 | AdaPoinTrVarLoss       | 6.482  | 3.614    | 8.746   | 7.422  | 6.845  | 5.277  | 8.365  | 5.831  | 5.755      |
 |                            |        |          |         |        |        |        |        |        |            |
-| ImgEncAdaPoinTr        | 6.414  | 3.596    | 8.701   | 7.517  | **6.614** | 5.217  | 8.165  | 5.785  | 5.714 |
-|                            | 6.409  | 3.586    | 8.713   | 7.489  | 6.621  | 5.218  | 8.155  | 5.783  | **5.709** |
-| **ImgAdaPoinTr (our)**     | 6.356  | 3.520    | **8.533** | 7.437  | *6.690* | 5.086 | 8.105 | 5.715 | 5.762      |
-|                            | **6.347** | **3.515** | 8.540 | *7.425 | 6.677  | **5.065**  | **8.082**  | **5.714** | 5.756      |
-| ImgCrossEncAdaPoinTr   | 6.487  | 3.573    | 8.868   | 7.429  | 6.692  | 5.439  | 8.217  | 5.890  | 5.787      |
-|                            | 6.482  | 3.571    | 8.864   | 7.448  | 6.683  | 5.426  | 8.199  | 5.883  | 5.787      |
+| ImgEncAdaPoinTr (6 images) | 6.414  | 3.596    | 8.701   | 7.517  | **6.614** | 5.217  | 8.165  | 5.785  | 5.714 |
+|  (12 images)               | 6.409  | 3.586    | 8.713   | 7.489  | 6.621  | 5.218  | 8.155  | 5.783  | **5.709** |
+| **ImgAdaPoinTr (our)** (6 images)    | 6.356  | 3.520    | **8.533** | 7.437  | *6.690* | 5.086 | 8.105 | 5.715 | 5.762      |
+|  (12 images)               | **6.347** | **3.515** | 8.540 | *7.425 | 6.677  | **5.065**  | **8.082**  | **5.714** | 5.756      |
+| ImgCrossEncAdaPoinTr (6 images)  | 6.487  | 3.573    | 8.868   | 7.429  | 6.692  | 5.439  | 8.217  | 5.890  | 5.787      |
+|  (12 images)               | 6.482  | 3.571    | 8.864   | 7.448  | 6.683  | 5.426  | 8.199  | 5.883  | 5.787      |
 | SegCrossEncAdaPoinTr   | 6.660  | 3.610    | 8.970   | 7.529  | 6.872  | 5.567  | 8.567  | 6.256  | 5.915      |
 | SegCrossDecAdaPoinTr   | 6.549  | 3.649    | 8.882   | 7.519  | *6.808 | 5.311  | 8.522  | 5.924  | 5.780      |
 | SegEncAdaPoinTr        | 6.569  | *3.544  | 8.893   | **7.404** | 6.939  | *5.189 | 8.544  | 6.179  | 5.862      |
@@ -109,6 +109,21 @@ To eval:
 ```bash
 bash ./scripts/test.sh 0 --ckpts experiments/ImgResNetEncAdaPoinTrVariableLoss/ImgPCN_models/train_ImgResNetEncAdaPoinTrVariableLoss_easy/ckpt-best.pth --config ./cfgs/ImgPCN_models/ImgResNetEncAdaPoinTrVariableLoss.yaml --exp_name test
 ```
+
+Test the ImgAdaPoinTr [pretrained model](https://sc.link/CZI41):
+
+```bash
+bash ./scripts/test.sh 0 --ckpts ./pretrained/ImgAdaPoinTr.pth --config ./cfgs/ImgPCN_models/ImgResNetEncAdaPoinTrVariableLoss.yaml --exp_name test
+```
+To run train SegEncAdaPoinTr:
+
+```bash
+bash ./scripts/train.sh 0 --config ./cfgs/SegImgPCN_models/SegEncAdaPoinTr_chair.yaml --exp_name train  --num_workers 16 --val_freq 1 --gdanet_w ./pretrained/GDANet_best_insiou_model.pth
+```
+
+Please download [GDANet weights](https://sc.link/2GRPr) for SegEncAdaPoinTr if you want to run experiments with the segmentator.
+
+
 
 ## Acknowledgements
 
