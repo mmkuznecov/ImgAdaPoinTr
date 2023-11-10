@@ -40,6 +40,18 @@ In corresponding directory.
 
 ImgPCN dataset can be accessed via [link](https://sc.link/vbpNl).
 
+For each object we provide 24 renders. Examples of renders:
+
+|         |         |         |         |
+|---------|---------|---------|---------|
+| ![Image 00](fig/renders_samples/00.png) | ![Image 01](fig/renders_samples/01.png) | ![Image 02](fig/renders_samples/02.png) | ![Image 03](fig/renders_samples/03.png) |
+| ![Image 04](fig/renders_samples/04.png) | ![Image 05](fig/renders_samples/05.png) | ![Image 06](fig/renders_samples/06.png) | ![Image 07](fig/renders_samples/07.png) |
+| ![Image 08](fig/renders_samples/08.png) | ![Image 09](fig/renders_samples/09.png) | ![Image 10](fig/renders_samples/10.png) | ![Image 11](fig/renders_samples/11.png) |
+| ![Image 12](fig/renders_samples/12.png) | ![Image 13](fig/renders_samples/13.png) | ![Image 14](fig/renders_samples/14.png) | ![Image 15](fig/renders_samples/15.png) |
+| ![Image 16](fig/renders_samples/16.png) | ![Image 17](fig/renders_samples/17.png) | ![Image 18](fig/renders_samples/18.png) | ![Image 19](fig/renders_samples/19.png) |
+| ![Image 20](fig/renders_samples/20.png) | ![Image 21](fig/renders_samples/21.png) | ![Image 22](fig/renders_samples/22.png) | ![Image 23](fig/renders_samples/23.png) |
+
+
 ### Results
 
 | Name             | AVG    | Airplane | Cabinet | Car    | Chair  | Lamp   | Sofa   | Table  | Boat   | F@1%  |
