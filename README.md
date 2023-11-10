@@ -38,8 +38,7 @@ In corresponding directory.
 
 ### Dataset
 
-ImgPCN dataset can be accessed via [link](https://n-ws-z5wzc-pd11.s3pd11.sbercloud.ru/b-ws-z5wzc-pd11-irp/datasets/ImgPCN/ImgPCN.tar.gz?AWSAccessKeyId=u-ws-z5wzc-pd11-yjo&Signature=udIvocnqf2EYsWFNqa8%2FXcdpS3g%3D&Expires=1698403154).
-
+ImgPCN dataset can be accessed via [link](https://sc.link/vbpNl).
 
 ### Results
 
@@ -97,7 +96,10 @@ To eval:
 ```bash
 bash ./scripts/test.sh 0 --ckpts experiments/ImgResNetEncAdaPoinTrVariableLoss/ImgPCN_models/train_ImgResNetEncAdaPoinTrVariableLoss_easy/ckpt-best.pth --config ./cfgs/ImgPCN_models/ImgResNetEncAdaPoinTrVariableLoss.yaml --exp_name test
 ```
+<<<<<<< HEAD
 
 ## Acknowledgements
 
 Our code is inspired by [AdaPoinTr](https://github.com/yuxumin/PoinTr) and [XMFnet](https://github.com/diegovalsesia/XMFnet).
+=======
+>>>>>>> 8b841341d3ae0fb33c6735a00deb60ba33dae1c7
