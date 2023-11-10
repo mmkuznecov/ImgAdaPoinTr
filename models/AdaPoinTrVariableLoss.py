@@ -950,36 +950,28 @@ class AdaPoinTrVariableLoss(nn.Module):
 
     def get_loss(self, ret, gt, epoch=1):
         pred_coarse, denoised_coarse, denoised_fine, pred_fine = ret
-#         print(denoised_coarse.shape, denoised_fine.shape)
-#         print('pred_coarse', pred_coarse.shape, pred_fine.shape)
         assert pred_fine.size(1) == gt.size(1)
 
-        # denoise loss
-#         print('self.factor', self.factor)
         idx = knn_point(self.factor, gt, denoised_coarse) # B n k 
         denoised_target = index_points(gt, idx) # B n k 3 
         denoised_target = denoised_target.reshape(gt.size(0), -1, 3)
-#         print('denoised_target', denoised_target.shape)
         assert denoised_target.size(1) == denoised_fine.size(1)
+
         loss_denoised = self.loss_func(denoised_fine, denoised_target)
         loss_denoised = loss_denoised * 0.5
 
         # recon loss
         loss_coarse = self.loss_func(pred_coarse, gt)
         loss_fine = self.loss_func(pred_fine, gt)
-#         loss_recon = loss_coarse + loss_fine
         loss_recon = loss_coarse  * self.alpha_loss[epoch] + loss_fine 
 
         return loss_denoised, loss_recon
 
     def forward(self, xyz):
         q, coarse_point_cloud, denoise_length = self.base_model(xyz) # B M C and B M 3
-    
         B, M ,C = q.shape
-
         global_feature = self.increase_dim(q.transpose(1,2)).transpose(1,2) # B M 1024
         global_feature = torch.max(global_feature, dim=1)[0] # B 1024
-
         rebuild_feature = torch.cat([
             global_feature.unsqueeze(-2).expand(-1, M, -1),
             q,

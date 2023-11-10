@@ -3,17 +3,19 @@
 # % Date:01/12/2022
 ###############################################################
 
+from functools import partial, reduce
+
 import torch
 import torch.nn as nn
-from functools import partial, reduce
 from timm.models.layers import DropPath, trunc_normal_
+import torch.nn.functional as F
+from torchvision import transforms,models
+import numpy as np
+
 from extensions.chamfer_dist import ChamferDistanceL1
 from .build import MODELS, build_model_from_cfg
 from models.Transformer_utils import *
 from utils import misc
-import torch.nn.functional as F
-from torchvision import transforms,models
-import numpy as np
 
 
 class SelfAttnBlockApi(nn.Module):
@@ -765,7 +767,7 @@ class SimpleRebuildFCLayer(nn.Module):
         return rebuild_pc
     
     
-######################################## ResNet18      ######################################## 
+########################################   ResNet18    ######################################## 
 class ResNet(nn.Module):
     def __init__(self):
         super().__init__()
@@ -891,10 +893,7 @@ class PCTransformer(nn.Module):
         
         #add Img
         img_feat = self.im_encoder(img)
-#         print('img_feat.shape', img_feat.shape)
         img_feat = self.get_better_size(img_feat)
-#         print('img_fea2t.shape', img_feat.shape)
-#         print('x.shape', x.shape)
         img_feat = img_feat.transpose(0,1)
         x = x.transpose(0,1)
         
@@ -916,7 +915,6 @@ class PCTransformer(nn.Module):
         x_out, _ = self.cross_attn3(x, pc_skip, pc_skip)
         x = self.layer_norm5(x_out + x)
         x = x.transpose(0,1)
-#         print('x_end.shape', x.shape)
         #end img block
         
         
@@ -962,7 +960,7 @@ class PCTransformer(nn.Module):
             torch.cat([
                 global_feature.unsqueeze(1).expand(-1, coarse.size(1), -1),
                 coarse], dim = -1)) # b n c
-            
+
             # forward decoder
             q = self.decoder(q=q, v=mem, q_pos=coarse, v_pos=coor)
 
@@ -1022,7 +1020,6 @@ class ImgResNetEncAdaPoinTrVariableLoss(nn.Module):
         )
         self.reduce_map = nn.Linear(self.trans_dim + 1027, self.trans_dim)
         self.build_loss_func()
-#         self.alpha_loss = np.linspace(1.0, 0.1, 400)
         self.alpha_loss = [scheduler_loss.get_lr(last_epoch=epoch) for epoch in range(STEP_SIZE, 600)]
         print('self.alpha_loss:', self.alpha_loss)
 
@@ -1046,17 +1043,12 @@ class ImgResNetEncAdaPoinTrVariableLoss(nn.Module):
         loss_coarse = self.loss_func(pred_coarse, gt)
         loss_fine = self.loss_func(pred_fine, gt)
         loss_recon = loss_coarse  * self.alpha_loss[epoch] + loss_fine 
-        
-        
 
         return loss_denoised, loss_recon
 
     def forward(self, xyz, img):
         q, coarse_point_cloud, denoise_length = self.base_model(xyz, img) # B M C and B M 3
-        
         B, M ,C = q.shape
-#         print('xyz', xyz.shape, 'xyz_from_img', xyz_from_img.shape, 'xyz_stack', xyz_stack.shape)
-#         print('B, M ,C', B, M ,C)
 
         global_feature = self.increase_dim(q.transpose(1,2)).transpose(1,2) # B M 1024
         global_feature = torch.max(global_feature, dim=1)[0] # B 1024

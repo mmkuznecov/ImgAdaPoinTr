@@ -3,17 +3,19 @@
 # % Date:01/12/2022
 ###############################################################
 
+from functools import partial, reduce
+
 import torch
 import torch.nn as nn
-from functools import partial, reduce
 from timm.models.layers import DropPath, trunc_normal_
+import torch.nn.functional as F
+from torchvision import transforms,models
+import numpy as np
+
 from extensions.chamfer_dist import ChamferDistanceL1
 from .build import MODELS, build_model_from_cfg
 from models.Transformer_utils import *
 from utils import misc
-import torch.nn.functional as F
-from torchvision import transforms,models
-import numpy as np
 
 
 class SelfAttnBlockApi(nn.Module):
@@ -765,7 +767,7 @@ class SimpleRebuildFCLayer(nn.Module):
         return rebuild_pc
     
     
-######################################## ResNet18      ######################################## 
+########################################   ResNet50    ######################################## 
 class ResNet(nn.Module):
     def __init__(self):
         super().__init__()
@@ -775,9 +777,7 @@ class ResNet(nn.Module):
         
     def forward(self,x):
         x = self.base(x)
-#         print('x.shape', x.shape)
         x = x.view(x.size(0), 8, -1)
-#         print('x.shape', x.shape)
         return x  
     
 
@@ -891,10 +891,7 @@ class PCTransformer(nn.Module):
         
         #add Img
         img_feat = self.im_encoder(img)
-#         print('img_feat.shape', img_feat.shape)
         img_feat = self.get_better_size(img_feat)
-#         print('img_fea2t.shape', img_feat.shape)
-#         print('x.shape', x.shape)
         img_feat = img_feat.transpose(0,1)
         x = x.transpose(0,1)
         
@@ -916,18 +913,13 @@ class PCTransformer(nn.Module):
         x_out, _ = self.cross_attn3(x, pc_skip, pc_skip)
         x = self.layer_norm5(x_out + x)
         x = x.transpose(0,1)
-#         print('x_end.shape', x.shape)
         #end img block
-        
         
         global_feature = self.increase_dim(x) # B 1024 N 
         global_feature = torch.max(global_feature, dim=1)[0] # B 1024
-
         coarse = self.coarse_pred(global_feature).reshape(bs, -1, 3)
-
         coarse_inp = misc.fps(xyz, self.num_query//2) # B 128 3
         coarse = torch.cat([coarse, coarse_inp], dim=1) # B 224+128 3?
-
         mem = self.mem_link(x)
 
         # query selection
@@ -941,7 +933,6 @@ class PCTransformer(nn.Module):
             picked_points = misc.fps(xyz, 64)
             picked_points = misc.jitter_points(picked_points)
             size_coarse_wo_denoise = coarse.shape[1]
-#             print(size_coarse_wo_denoise)
             coarse = torch.cat([coarse, picked_points], dim=1) # B 256+64 3?
             denoise_length = 64     
 
@@ -1022,16 +1013,13 @@ class ImgResNet50EncAdaPoinTrVariableLoss(nn.Module):
         )
         self.reduce_map = nn.Linear(self.trans_dim + 1027, self.trans_dim)
         self.build_loss_func()
-#         self.alpha_loss = np.linspace(1.0, 0.1, 400)
         self.alpha_loss = [scheduler_loss.get_lr(last_epoch=epoch) for epoch in range(STEP_SIZE, 600)]
-        print('self.alpha_loss:', self.alpha_loss)
 
     def build_loss_func(self):
         self.loss_func = ChamferDistanceL1()
 
     def get_loss(self, ret, gt, epoch):
         pred_coarse, denoised_coarse, denoised_fine, pred_fine = ret
-        
         assert pred_fine.size(1) == gt.size(1)
         
         # denoise loss
@@ -1039,6 +1027,7 @@ class ImgResNet50EncAdaPoinTrVariableLoss(nn.Module):
         denoised_target = index_points(gt, idx) # B n k 3 
         denoised_target = denoised_target.reshape(gt.size(0), -1, 3)
         assert denoised_target.size(1) == denoised_fine.size(1)
+
         loss_denoised = self.loss_func(denoised_fine, denoised_target)
         loss_denoised = loss_denoised * 0.5
 
@@ -1046,18 +1035,12 @@ class ImgResNet50EncAdaPoinTrVariableLoss(nn.Module):
         loss_coarse = self.loss_func(pred_coarse, gt)
         loss_fine = self.loss_func(pred_fine, gt)
         loss_recon = loss_coarse  * self.alpha_loss[epoch] + loss_fine 
-        
-        
 
         return loss_denoised, loss_recon
 
     def forward(self, xyz, img):
         q, coarse_point_cloud, denoise_length = self.base_model(xyz, img) # B M C and B M 3
-        
         B, M ,C = q.shape
-#         print('xyz', xyz.shape, 'xyz_from_img', xyz_from_img.shape, 'xyz_stack', xyz_stack.shape)
-#         print('B, M ,C', B, M ,C)
-
         global_feature = self.increase_dim(q.transpose(1,2)).transpose(1,2) # B M 1024
         global_feature = torch.max(global_feature, dim=1)[0] # B 1024
 
