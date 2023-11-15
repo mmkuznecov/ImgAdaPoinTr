@@ -63,9 +63,11 @@ For each object we provide 24 renders. Examples of renders:
 | SeedFormer       | 6.740  | 3.850    | 9.050   | 8.060  | 7.060  | 5.210  | 8.850  | 6.050  | 5.850  | -     |
 | AdaPoinTr        | 6.528  | 3.681    | 8.823   | 7.476  | 6.850  | 5.478  | 8.353  | 5.801  | 5.763  | 0.845 |
 | SegEncAdaPoinTr  | 6.569  | *3.544   | 8.893   | ***7.404*** | 6.939  | *5.189  | 8.544  | 6.179  | 5.862  | *0.847|
-| ***ImgAdaPoinTr***     | ***6.347*** | ***3.515*** | ***8.540*** | *7.425 | ***6.677*** | ***5.065*** | ***8.082*** | ***5.714*** | ***5.756*** | ***0.857*** |
+| ***ImgAdaPoinTr***     | 6.347 | 3.515 | ***8.540*** | *7.425 | 6.677 | ***5.065*** | ***8.082*** | 5.714 | 5.756 | 0.857 |
+| <u>*ImgEncSegDecAPTr*</u>     | <u>***6.339***</u> | <u>***3.461***</u> | <u>8.646</u> | <u>*7.437</u> | <u>***6.616***</u> | <u>***5.065***</u> | <u>8.140</u> | <u>***5.685***</u> | <u>***5.660***</u> | <u>***0.859***</u> |
 
-*Result on the PCN dataset. We use the CD-L1 (multiplied by 1000) to compare ImgAdaPoinTr with other methods. \* Denotes the top result within its experimental group, surpassing the value in AdaPoinTr. Code for metric calculation provided [here](extensions/chamfer_dist/)*
+
+*Result on the PCN dataset. We use the CD-L1 (multiplied by 1000) to compare ImgAdaPoinTr with other methods. \* Denotes the top result within its experimental group, surpassing the value in AdaPoinTr. The last line in the table is the additional baseline combining using images and segmentation.  Code for metric calculation provided [here](extensions/chamfer_dist/)*
 
 
 ### Ablation study
