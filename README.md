@@ -119,7 +119,7 @@ To run train SegEncAdaPoinTr:
 bash ./scripts/train.sh 0 --config ./cfgs/SegImgPCN_models/SegEncAdaPoinTr.yaml --exp_name train  --num_workers 16 --val_freq 1 --gdanet_w ./pretrained/GDANet_best_insiou_model.pth
 ```
 
-Please download [GDANet weights](https://sc.link/2GRPr) for SegEncAdaPoinTr if you want to run experiments with the segmentator.
+Please download [GDANet weights](https://sc.link/2GRPr) for SegEncAdaPoinTr if you want to run experiments with the segmentator. Original GDANet code can be found [here](https://github.com/mutianxu/GDANet).
 
 
 
