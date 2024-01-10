@@ -4,7 +4,7 @@ This repository contains implementation for "ImgAdaPoinTr: Improving Point Cloud
 
 ## Pipeline
 
-![scheme](fig/imgadapointr_scheme.png)
+![scheme](fig/imgadapointr_scheme.jpg)
 
 An extended pipeline scheme. Input partial point cloud is first downsampled to derive center points. Local features
 around these center points are extracted using a lightweight DGCNN. Simultaneously, the Image Encoder processes the visual
