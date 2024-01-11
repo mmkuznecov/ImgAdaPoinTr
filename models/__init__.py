@@ -27,3 +27,4 @@ import models.AdaPoinTrVariableLoss
 import models.ConvNextEncAdaPoinTrVariableLoss
 import models.ConvNextEncAdaPoinTrVariableLossLin
 import models.ImgResNet50EncAdaPoinTrVariableLossLin
+import models.ImgEncSegDecAdaPoinTrVariableLoss
