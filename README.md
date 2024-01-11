@@ -123,6 +123,17 @@ bash ./scripts/train.sh 0 --config ./cfgs/SegImgPCN_models/SegEncAdaPoinTr.yaml 
 
 Please download [GDANet weights](https://sc.link/2GRPr) for SegEncAdaPoinTr if you want to run experiments with the segmentator. Original GDANet code can be found [here](https://github.com/mutianxu/GDANet).
 
+To run train ImgEncSegDecAPTr:
+
+```bash
+bash ./scripts/train.sh 0 --config ./cfgs/SegImgPCN_models/ImgEncSegDecAdaPoinTrVariableLoss.yaml --exp_name train  --num_workers 16 --val_freq 1 --gdanet_w ./pretrained/GDANet_best_insiou_model.pth
+```
+
+Test the ImgEncSegDecAPTr [pretrained model](https://sc.link/rSIt0):
+
+```bash
+bash ./scripts/test.sh 0 --ckpts ./pretrained/ImgEncSegDecAPTr.pth --config ./cfgs/SegImgPCN_models/ImgEncSegDecAdaPoinTrVariableLoss.yaml  --exp_name test
+```
 
 
 ## Acknowledgements
