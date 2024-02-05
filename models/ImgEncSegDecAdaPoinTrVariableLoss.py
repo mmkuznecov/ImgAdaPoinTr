@@ -92,13 +92,7 @@ class PCTransformer(nn.Module):
             nn.Linear(256, 1),
             nn.Sigmoid()
         )
-#         добавить при обработке картинок
-#         self.img_encoder = ResNet()
-#         self.img_dim = 384
-#         self.get_better_size = nn.Sequential(
-#             nn.Linear(196, self.img_dim),
-#             nn.GELU()
-#         )
+        
         self.img_dim = 384
         self.cross_attn1 = nn.MultiheadAttention(self.img_dim, 8)
         self.layer_norm1 = nn.LayerNorm(self.img_dim)
@@ -169,39 +163,8 @@ class PCTransformer(nn.Module):
         x = self.encoder(x + pe, coor) # b n c
         
         #add Seg
-#         print('x coor xyz self.center_num', x.shape, coor.shape, xyz.shape, self.center_num)
         start_time = time.time()
-#         norm_plt = points_normals.estimate_pointcloud_normals(coor,
-#                                                              30,
-#                                                              disambiguate_directions=False,
-# #                                                              use_symeig_workaround=False,
-#                                                             )
-#         seg_emb, seg_idx = self.segmentator(coor.transpose(1, 2), norm_plt, cls_vec)
-        
-#         seg_emb = seg_emb.transpose(1, 2).transpose(0, 1)
-#         seg_emb = self.get_better_seg_size(seg_emb)
-#         x = x.transpose(0,1)
-#         # layer 1: cross + self attention
-#         x_out, _ = self.cross_attn1(x , seg_emb, seg_emb)
-#         x = self.layer_norm1(x_out + x) # b n c
-        
-#         x_out, _ = self.self_attn1(x, x, x)
-#         x = self.layer_norm2(x_out + x)
-#         pc_skip = x
-        
-#         # layer 2: cross + self attention
-#         x_out, _ = self.cross_attn2(x , seg_emb, seg_emb)
-#         x = self.layer_norm3(x_out + x) # b n c
-        
-#         x_out, _ = self.self_attn2(x, x, x)
-#         x = self.layer_norm4(x_out + x)
-        
-#         x_out, _ = self.cross_attn3(x, pc_skip, pc_skip)
-#         x = self.layer_norm5(x_out + x)
-#         x = x.transpose(0,1)
-#         end seg block
-        
-        
+    
         #add Img
         img_feat = self.im_encoder(img)
 #         print('img_feat.shape', img_feat.shape)
@@ -229,7 +192,6 @@ class PCTransformer(nn.Module):
         x_out, _ = self.cross_attn3(x, pc_skip, pc_skip)
         x = self.layer_norm5(x_out + x)
         x = x.transpose(0,1)
-#         print('x_end.shape', x.shape)
         #end img block
         
         
