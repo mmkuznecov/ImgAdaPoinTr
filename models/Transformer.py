@@ -1,11 +1,11 @@
+import numpy as np
 import torch
 import torch.nn as nn
-
 from timm.models.layers import DropPath,trunc_normal_
 
 from .dgcnn_group import DGCNN_Grouper
 from utils.logger import *
-import numpy as np
+
 # from knn_cuda import KNN
 # knn = KNN(k=8, transpose_mode=False)
 

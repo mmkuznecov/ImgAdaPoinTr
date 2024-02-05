@@ -1,18 +1,13 @@
-##############################################################
-# % Author: Castle
-# % Date:01/12/2022
-###############################################################
+from functools import partial
 
 import torch
 import torch.nn as nn
-from functools import partial, reduce
+from torchvision import transforms, models
 from timm.models.layers import DropPath, trunc_normal_
-from extensions.chamfer_dist import ChamferDistanceL1
-from .build import MODELS, build_model_from_cfg
+
 from models.Transformer_utils import *
 from utils import misc
-import torch.nn.functional as F
-from torchvision import transforms,models
+
 
 
 class SelfAttnBlockApi(nn.Module):
@@ -109,8 +104,8 @@ class SelfAttnBlockApi(nn.Module):
 
         x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
         return x
-
-
+    
+    
 class CrossAttnBlockApi(nn.Module):
     r'''
         1. Norm Decoder Block 
@@ -231,9 +226,7 @@ class CrossAttnBlockApi(nn.Module):
             query_len = q.size(1)
             mask = torch.zeros(query_len, query_len).to(q.device)
             mask[:-denoise_length, -denoise_length:] = 1.
-#             print('query_len', query_len)
-#             print('mask.shape', mask.shape)
-#             print('denoise_length', denoise_length)
+
         # Self attn
         feature_list = []
         if self.self_attn_block_length == 2:
@@ -313,7 +306,7 @@ class CrossAttnBlockApi(nn.Module):
 
         q = q + self.drop_path2(self.ls2(self.mlp(self.norm2(q))))
         return q
-######################################## Entry ########################################  
+
 
 class TransformerEncoder(nn.Module):
     """ Transformer Encoder without hierarchical structure
@@ -338,6 +331,7 @@ class TransformerEncoder(nn.Module):
         for _, block in enumerate(self.blocks):
             x = block(x, pos, idx=idx) 
         return x
+    
 
 class TransformerDecoder(nn.Module):
     """ Transformer Decoder without hierarchical structure
@@ -370,6 +364,7 @@ class TransformerDecoder(nn.Module):
         for _, block in enumerate(self.blocks):
             q = block(q, v, q_pos, v_pos, self_attn_idx=self_attn_idx, cross_attn_idx=cross_attn_idx, denoise_length=denoise_length)
         return q
+    
 
 class PointTransformerEncoder(nn.Module):
     """ Vision Transformer for point cloud encoder/decoder
@@ -434,6 +429,7 @@ class PointTransformerEncoder(nn.Module):
     def forward(self, x, pos):
         x = self.blocks(x, pos)
         return x
+
 
 class PointTransformerDecoder(nn.Module):
     """ Vision Transformer for point cloud encoder/decoder
@@ -504,13 +500,16 @@ class PointTransformerDecoder(nn.Module):
         q = self.blocks(q, v, q_pos, v_pos, denoise_length=denoise_length)
         return q
 
+
 class PointTransformerEncoderEntry(PointTransformerEncoder):
     def __init__(self, config, **kwargs):
         super().__init__(**dict(config))
 
+
 class PointTransformerDecoderEntry(PointTransformerDecoder):
     def __init__(self, config, **kwargs):
         super().__init__(**dict(config))
+
 
 ######################################## Grouper ########################################  
 class DGCNN_Grouper(nn.Module):
@@ -628,6 +627,7 @@ class DGCNN_Grouper(nn.Module):
 
         return coor, f
 
+
 class Encoder(nn.Module):
     def __init__(self, encoder_channel):
         super().__init__()
@@ -659,6 +659,7 @@ class Encoder(nn.Module):
         feature = self.second_conv(feature) # BG 1024 n
         feature_global = torch.max(feature, dim=2, keepdim=False)[0] # BG 1024
         return feature_global.reshape(bs, g, self.encoder_channel)
+
 
 class SimpleEncoder(nn.Module):
     def __init__(self, k = 32, embed_dims=128):
@@ -694,6 +695,7 @@ class SimpleEncoder(nn.Module):
         features = self.embedding(neighborhood) # B G C
         
         return center, features
+
 
 ######################################## Fold ########################################    
 class Fold(nn.Module):
@@ -740,6 +742,7 @@ class Fold(nn.Module):
 
         return fd2
 
+
 class SimpleRebuildFCLayer(nn.Module):
     def __init__(self, input_dims, step, hidden_dim=512):
         super().__init__()
@@ -762,313 +765,59 @@ class SimpleRebuildFCLayer(nn.Module):
         rebuild_pc = self.layer(patch_feature).reshape(batch_size, -1, self.step , 3)
         assert rebuild_pc.size(1) == rec_feature.size(1)
         return rebuild_pc
-    
-    
+
+
+class CycleLR():
+    def __init__(self, step_size, max_lr, base_lr=0.001, gamma=0.995, last_epoch=-1):
+        self.base_lr = base_lr
+        self.max_lr = max_lr
+        self.step_size = step_size
+        self.gamma = gamma
+        super(CycleLR, self).__init__()
+        
+    def get_lr(self, last_epoch):
+        cycle = np.floor(1 + last_epoch / (2 * self.step_size))
+        x = np.abs(last_epoch / self.step_size - 2 * cycle + 1)
+        lr_t = self.base_lr + (self.max_lr - self.base_lr) * np.maximum(0, (1-x)) * self.gamma**(last_epoch)
+        return lr_t
+
+
+########################################    ConvNext   ######################################## 
+class ConvNext(nn.Module):
+    def __init__(self):
+        super().__init__()
+        base = timm.create_model("convnext_small_384_in22ft1k", pretrained=False)
+        self.base = nn.Sequential(*list(base.children())[:-1])
+
+    def forward(self,x):
+        x = self.base(x)
+        x = x.reshape(x.size(0), 98, -1)
+        return x  
+
+
 ######################################## ResNet18      ######################################## 
-class ResNet(nn.Module):
+class ResNet18(nn.Module):
     def __init__(self):
         super().__init__()
         base = models.resnet18(pretrained=False)
         self.base = nn.Sequential(*list(base.children())[:-3])
         in_features = base.fc.in_features
         
-        self.increase_block =  nn.Sequential(
-            nn.Conv2d(256, 256, 3, bias=False),
-            nn.BatchNorm2d(256),
-            nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(256, 256, 3, bias=False),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
-            nn.Conv2d(256, 256, 3, bias=False),
-            nn.BatchNorm2d(256),
-            nn.ReLU()
-        )
+    def forward(self,x):
+        x = self.base(x)
+        x = x.view(x.size(0), 256, -1)
+        return x 
+
+
+########################################   ResNet50    ######################################## 
+class ResNet50(nn.Module):
+    def __init__(self):
+        super().__init__()
+        base = models.resnet50(pretrained=False)
+        self.base = nn.Sequential(*list(base.children())[:-1])
+        in_features = base.fc.in_features
         
     def forward(self,x):
         x = self.base(x)
-        print('x1', x.shape)
-        x = self.increase_block(x)
-        print('x2', x.shape)
-        x = x.view(x.size(0), 256, -1) 
-       
+        x = x.view(x.size(0), 8, -1)
         return x  
-    
-
-######################################## PCTransformer ########################################   
-class PCTransformer(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        encoder_config = config.encoder_config
-        decoder_config = config.decoder_config
-        self.center_num  = getattr(config, 'center_num', [512, 128])
-        self.encoder_type = config.encoder_type
-        assert self.encoder_type in ['graph', 'pn'], f'unexpected encoder_type {self.encoder_type}'
-
-        in_chans = 3
-        self.num_query = query_num = config.num_query
-        global_feature_dim = config.global_feature_dim
-
-        print_log(f'Transformer with config {config}', logger='MODEL')
-        # base encoder
-        if self.encoder_type == 'graph':
-            self.grouper = DGCNN_Grouper(k = 16)
-        else:
-            self.grouper = SimpleEncoder(k = 32, embed_dims=512)
-        self.pos_embed = nn.Sequential(
-            nn.Linear(in_chans, 128),
-            nn.GELU(),
-            nn.Linear(128, encoder_config.embed_dim)
-        )  
-        self.input_proj = nn.Sequential(
-            nn.Linear(self.grouper.num_features, 512),
-            nn.GELU(),
-            nn.Linear(512, encoder_config.embed_dim)
-        )
-        # Coarse Level 1 : Encoder
-        self.encoder = PointTransformerEncoderEntry(encoder_config)
-
-        self.increase_dim = nn.Sequential(
-            nn.Linear(encoder_config.embed_dim, 1024),
-            nn.GELU(),
-            nn.Linear(1024, global_feature_dim))
-        # query generator
-        self.coarse_pred = nn.Sequential(
-            nn.Linear(global_feature_dim, 1024),
-            nn.GELU(),
-            nn.Linear(1024, 3 * query_num)
-        )
-        self.mlp_query = nn.Sequential(
-            nn.Linear(global_feature_dim + 3, 1024),
-            nn.GELU(),
-            nn.Linear(1024, 1024),
-            nn.GELU(),
-            nn.Linear(1024, decoder_config.embed_dim)
-        )
-        # assert decoder_config.embed_dim == encoder_config.embed_dim
-        if decoder_config.embed_dim == encoder_config.embed_dim:
-            self.mem_link = nn.Identity()
-        else:
-            self.mem_link = nn.Linear(encoder_config.embed_dim, decoder_config.embed_dim)
-        # Coarse Level 2 : Decoder
-        self.decoder = PointTransformerDecoderEntry(decoder_config)
- 
-        self.query_ranking = nn.Sequential(
-            nn.Linear(3, 256),
-            nn.GELU(),
-            nn.Linear(256, 256),
-            nn.GELU(),
-            nn.Linear(256, 1),
-            nn.Sigmoid()
-        )
-        
-        self.img_dim = 384
-        self.apply(self._init_weights)
-
-    def _init_weights(self, m):
-        if isinstance(m, nn.Linear):
-            trunc_normal_(m.weight, std=.02)
-            if isinstance(m, nn.Linear) and m.bias is not None:
-                nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.LayerNorm):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
-
-    def forward(self, xyz):
-        bs = xyz.size(0)
-        coor, f = self.grouper(xyz, self.center_num) # b n c
-        pe =  self.pos_embed(coor)
-        x = self.input_proj(f)
-
-        x = self.encoder(x + pe, coor) # b n c
-        
-        global_feature = self.increase_dim(x) # B 1024 N 
-        global_feature = torch.max(global_feature, dim=1)[0] # B 1024
-
-        coarse = self.coarse_pred(global_feature).reshape(bs, -1, 3)
-
-        coarse_inp = misc.fps(xyz, self.num_query//2) # B 128 3
-        coarse = torch.cat([coarse, coarse_inp], dim=1) # B 224+128 3?
-
-        mem = self.mem_link(x)
-
-        # query selection
-        query_ranking = self.query_ranking(coarse) # b n 1
-        idx = torch.argsort(query_ranking, dim=1, descending=True) # b n 1
-        coarse = torch.gather(coarse, 1, idx[:,:self.num_query].expand(-1, -1, coarse.size(-1)))
-
-        if self.training:
-            # add denoise task
-            # first pick some point : 64?
-            picked_points = misc.fps(xyz, 64)
-            picked_points = misc.jitter_points(picked_points)
-            size_coarse_wo_denoise = coarse.shape[1]
-#             print(size_coarse_wo_denoise)
-            coarse = torch.cat([coarse, picked_points], dim=1) # B 256+64 3?
-            denoise_length = 64     
-
-            # produce query
-            q = self.mlp_query(
-            torch.cat([
-                global_feature.unsqueeze(1).expand(-1, coarse.size(1), -1),
-                coarse], dim = -1)) # b n c
-
-            # forward decoder
-            q = self.decoder(q=q, v=mem, q_pos=coarse, v_pos=coor, denoise_length=denoise_length)
-            
-            return q, coarse, denoise_length
-
-        else:
-            # produce query
-            q = self.mlp_query(
-            torch.cat([
-                global_feature.unsqueeze(1).expand(-1, coarse.size(1), -1),
-                coarse], dim = -1)) # b n c
-            
-            # forward decoder
-            q = self.decoder(q=q, v=mem, q_pos=coarse, v_pos=coor)
-
-            return q, coarse, 0
-        
-
-######################################## PoinTr ########################################  
-
-@MODELS.register_module()
-class ImgResNetFoldNetAdaPoinTr2(nn.Module):
-    def __init__(self, config, **kwargs):
-        super().__init__()
-        self.trans_dim = config.decoder_config.embed_dim
-        self.num_query = config.num_query
-        self.num_points = getattr(config, 'num_points', None)
-
-        self.decoder_type = config.decoder_type
-        assert self.decoder_type in ['fold', 'fc'], f'unexpected decoder_type {self.decoder_type}'
-
-        self.fold_step = 8
-        self.base_model = PCTransformer(config)
-        
-        if self.decoder_type == 'fold':
-            self.factor = self.fold_step**2
-            self.decode_head = Fold(self.trans_dim, step=self.fold_step, hidden_dim=256)  # rebuild a cluster point
-        else:
-            if self.num_points is not None:
-                self.factor = self.num_points // self.num_query
-                assert self.num_points % self.num_query == 0
-                self.decode_head = SimpleRebuildFCLayer(self.trans_dim * 2, step=self.num_points // self.num_query)  # rebuild a cluster point
-            else:
-                self.factor = self.fold_step**2
-                self.decode_head = SimpleRebuildFCLayer(self.trans_dim * 2, step=self.fold_step**2)
-        self.increase_dim = nn.Sequential(
-            nn.Conv1d(self.trans_dim, 1024, 1),
-            nn.BatchNorm1d(1024),
-            nn.LeakyReLU(negative_slope=0.2),
-            nn.Conv1d(1024, 1024, 1)
-        )
-        self.reduce_map = nn.Linear(self.trans_dim + 1027 + 784, self.trans_dim)
-        self.build_loss_func()
-        
-        # add for Images
-        self.img_encoder = ResNet()
-        self.img_linear_layer = nn.Sequential(
-            nn.Linear(1024, 784),
-            nn.GELU(),
-        )
-        
-#         self.img_linear_layer = nn.Sequential(
-#             nn.Linear(50176, 6272),
-#             nn.GELU(),
-#             nn.Linear(6272, 784),
-#             nn.GELU(),
-#         )
-
-
-    def build_loss_func(self):
-        self.loss_func = ChamferDistanceL1()
-
-    def get_loss(self, ret, gt, epoch=1):
-        pred_coarse, denoised_coarse, denoised_fine, pred_fine = ret
-        
-        assert pred_fine.size(1) == gt.size(1)
-        
-        # denoise loss
-        idx = knn_point(self.factor, gt, denoised_coarse) # B n k 
-        denoised_target = index_points(gt, idx) # B n k 3 
-        denoised_target = denoised_target.reshape(gt.size(0), -1, 3)
-        assert denoised_target.size(1) == denoised_fine.size(1)
-        loss_denoised = self.loss_func(denoised_fine, denoised_target)
-        loss_denoised = loss_denoised * 0.5
-
-        # recon loss
-        loss_coarse = self.loss_func(pred_coarse, gt)
-        loss_fine = self.loss_func(pred_fine, gt)
-        loss_recon = loss_coarse + loss_fine 
-        
-        
-
-        return loss_denoised, loss_recon
-
-    def forward(self, xyz, img):
-        q, coarse_point_cloud, denoise_length = self.base_model(xyz) # B M C and B M 3
-        
-        B, M ,C = q.shape
-#         print('xyz', xyz.shape, 'xyz_from_img', xyz_from_img.shape, 'xyz_stack', xyz_stack.shape)
-#         print('B, M ,C', B, M ,C)
-
-        global_feature = self.increase_dim(q.transpose(1,2)).transpose(1,2) # B M 1024
-        global_feature = torch.max(global_feature, dim=1)[0] # B 1024
-        
-        # add image feat
-        img_feat = self.img_encoder(img)
-#         img_feat = self.img_linear_layer(img_feat.reshape(B, -1))
-        print('img_feat.shape', img_feat.shape)
-        img_feat = self.img_linear_layer(img_feat.reshape(B, -1))
-        print('img_feat2.shape', img_feat.shape)
-#         print('img_feat', img_feat.shape)
-#         print('img_feat.unsqueeze(-2).expand(-1, M, -1)', img_feat.unsqueeze(-2).expand(-1, M, -1).shape)
-#         print('global_feature', global_feature.shape) 
-#         print('global_feature.unsqueeze(-2).expand(-1, M, -1).shape', global_feature.unsqueeze(-2).expand(-1, M, -1).shape)
-        
-        rebuild_feature = torch.cat([
-            global_feature.unsqueeze(-2).expand(-1, M, -1),
-            img_feat.unsqueeze(-2).expand(-1, M, -1),
-            q,
-            coarse_point_cloud], dim=-1)  # B M 1027 + C
-        
-        
-        
-        
-        # NOTE: foldingNet
-        if self.decoder_type == 'fold':
-            rebuild_feature = self.reduce_map(rebuild_feature.reshape(B*M, -1)) # BM C
-            relative_xyz = self.decode_head(rebuild_feature).reshape(B, M, 3, -1)    # B M 3 S
-            rebuild_points = (relative_xyz + coarse_point_cloud.unsqueeze(-1)).transpose(2,3)  # B M S 3
-
-        else:
-            rebuild_feature = self.reduce_map(rebuild_feature) # B M C
-            relative_xyz = self.decode_head(rebuild_feature)   # B M S 3
-            rebuild_points = (relative_xyz + coarse_point_cloud.unsqueeze(-2))  # B M S 3
-
-        if self.training:
-            # split the reconstruction and denoise task
-            pred_fine = rebuild_points[:, :-denoise_length].reshape(B, -1, 3).contiguous()
-            pred_coarse = coarse_point_cloud[:, :-denoise_length].contiguous()
-
-            denoised_fine = rebuild_points[:, -denoise_length:].reshape(B, -1, 3).contiguous()
-            denoised_coarse = coarse_point_cloud[:, -denoise_length:].contiguous()
-
-            assert pred_fine.size(1) == self.num_query * self.factor
-            assert pred_coarse.size(1) == self.num_query
-
-            ret = (pred_coarse, denoised_coarse, denoised_fine, pred_fine)
-            return ret
-
-        else:
-            assert denoise_length == 0
-            rebuild_points = rebuild_points.reshape(B, -1, 3).contiguous()  # B N 3
-
-            assert rebuild_points.size(1) == self.num_query * self.factor
-            assert coarse_point_cloud.size(1) == self.num_query
-
-            ret = (coarse_point_cloud, rebuild_points)
-            return ret
-        

@@ -6,7 +6,6 @@ import models.PCN
 import models.FoldingNet
 import models.SnowFlakeNet
 import models.AdaPoinTr
-import models.QImgAdaPoinTr
 import models.ImgResNetEncDecAdaPoinTr
 import models.ImgResNetEncAdaPoinTr
 import models.ImgResNetEncAdaPoinTrVariableLoss
