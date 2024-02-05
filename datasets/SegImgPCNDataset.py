@@ -5,7 +5,7 @@ import os, sys
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(BASE_DIR)
 import data_transforms
-from .io import IO
+from .io_module import IO
 import random
 import os
 import json
