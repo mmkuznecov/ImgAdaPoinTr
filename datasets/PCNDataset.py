@@ -1,15 +1,17 @@
 import torch.utils.data as data
 import numpy as np
-import os, sys
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(BASE_DIR)
-import data_transforms
-from .io_module import IO
-import random
 import os
+import sys
+import data_transforms
+import random
 import json
 from .build import DATASETS
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(BASE_DIR)
+
 from utils.logger import *
+from utils.io_module import IO
 
 
 # References:
