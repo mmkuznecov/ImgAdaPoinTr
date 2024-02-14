@@ -2,25 +2,28 @@
 # % Author: Castle
 # % Date:01/12/2022
 ###############################################################
-
+import time
 from functools import partial, reduce
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision import transforms,models
+from torchvision import transforms, models
+from pytorch3d.ops import points_normals
 from timm.models.layers import DropPath, trunc_normal_
 
 from extensions.chamfer_dist import ChamferDistanceL1
-from .build import MODELS, build_model_from_cfg
+from ..build import MODELS, build_model_from_cfg
 from models.Transformer_utils import *
 from utils import misc
+from ..GDANet_ptseg import GDANet
 from base_blocks import SelfAttnBlockApi, CrossAttnBlockApi, TransformerEncoder
 from base_blocks import TransformerDecoder, PointTransformerEncoder
 from base_blocks import PointTransformerDecoder, PointTransformerEncoderEntry
 from base_blocks import PointTransformerDecoderEntry, DGCNN_Grouper, Encoder
-from base_blocks import SimpleEncoder, Fold, SimpleRebuildFCLayer,
-from base_blocks import ResNet18
+from base_blocks import SimpleEncoder, Fold, SimpleRebuildFCLayer
+from base_blocks import ResNet18, CycleLR
 
 
 ######################################## PCTransformer ########################################   
@@ -90,12 +93,7 @@ class PCTransformer(nn.Module):
             nn.Sigmoid()
         )
         
-        self.im_encoder = ResNet()
         self.img_dim = 384
-        self.get_better_size = nn.Sequential(
-            nn.Linear(196, self.img_dim),
-            nn.GELU()
-        )
         self.cross_attn1 = nn.MultiheadAttention(self.img_dim, 8)
         self.layer_norm1 = nn.LayerNorm(self.img_dim)
 
@@ -107,6 +105,7 @@ class PCTransformer(nn.Module):
         
         self.self_attn2 = nn.MultiheadAttention(self.img_dim, 8)
         self.layer_norm4 = nn.LayerNorm(self.img_dim)
+        
         
         self.cross_attn3 = nn.MultiheadAttention(self.img_dim, 8)
         self.layer_norm5 = nn.LayerNorm(self.img_dim)
@@ -125,6 +124,24 @@ class PCTransformer(nn.Module):
         
         self.cross_attn6 = nn.MultiheadAttention(self.img_dim, 8)
         self.layer_norm10 = nn.LayerNorm(self.img_dim)
+        
+        
+        self.segmentator = GDANet(50)
+        self.img_dim = 384
+        self.get_better_seg_size = nn.Sequential(
+            nn.Linear(128, self.img_dim),
+            nn.GELU()
+        )
+        self.get_better_seg_size2 = nn.Sequential(
+            nn.Linear(128, self.img_dim),
+            nn.GELU()
+        )
+        
+        self.get_better_img_size = nn.Sequential(
+            nn.Linear(196, self.img_dim),
+            nn.GELU()
+        )
+        self.im_encoder = ResNet18()
 
         self.apply(self._init_weights)
 
@@ -137,7 +154,7 @@ class PCTransformer(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-    def forward(self, xyz, img):
+    def forward(self, xyz, img, cls_vec):
         bs = xyz.size(0)
         coor, f = self.grouper(xyz, self.center_num) # b n c
         pe =  self.pos_embed(coor)
@@ -145,12 +162,15 @@ class PCTransformer(nn.Module):
 
         x = self.encoder(x + pe, coor) # b n c
         
+        #add Seg
+        start_time = time.time()
+    
         #add Img
         img_feat = self.im_encoder(img)
 #         print('img_feat.shape', img_feat.shape)
-        img_feat = self.get_better_size(img_feat)
+        img_feat = self.get_better_img_size(img_feat)
 #         print('img_fea2t.shape', img_feat.shape)
-#         print('x.shape', x.shape)
+        
         img_feat = img_feat.transpose(0,1)
         x = x.transpose(0,1)
         
@@ -172,7 +192,6 @@ class PCTransformer(nn.Module):
         x_out, _ = self.cross_attn3(x, pc_skip, pc_skip)
         x = self.layer_norm5(x_out + x)
         x = x.transpose(0,1)
-#         print('x_end.shape', x.shape)
         #end img block
         
         
@@ -210,16 +229,27 @@ class PCTransformer(nn.Module):
             # forward decoder
             q = self.decoder(q=q, v=mem, q_pos=coarse, v_pos=coor, denoise_length=denoise_length)
             
-            #add img block
-#             print('TRAIN   ' * 5)
-#             print('q.shape', q.shape)
+            # add seg block
+            norm_plt = points_normals.estimate_pointcloud_normals(
+                coarse[:,:size_coarse_wo_denoise,:],
+                30,
+                disambiguate_directions=False,
+#               use_symeig_workaround=False,
+            )
+            seg_emb, seg_idx = self.segmentator(coarse[:,:size_coarse_wo_denoise,:].transpose(1, 2),
+                                                norm_plt,
+                                                cls_vec)
+            seg_emb = seg_emb.transpose(1, 2).transpose(0, 1)
+            seg_emb = self.get_better_seg_size2(seg_emb)
+       
             q = q.transpose(0,1)
 #             print('q_transpose.shape', q.shape)
             # layer 1: cross + self attention
             q_temp = q.clone()
             q_temp = q_temp[:size_coarse_wo_denoise]
 #             print('q_temp.shape', q_temp.shape)
-            q_out, _ = self.cross_attn4(q_temp , img_feat, img_feat)
+            
+            q_out, _ = self.cross_attn4(q_temp , seg_emb, seg_emb)
             q_temp = self.layer_norm6(q_out + q_temp) # b n c
 
             q_out, _ = self.self_attn3(q_temp, q_temp, q_temp)
@@ -227,7 +257,7 @@ class PCTransformer(nn.Module):
             q_skip = q_temp
 
             # layer 2: cross + self attention
-            q_out, _ = self.cross_attn5(q_temp , img_feat, img_feat)
+            q_out, _ = self.cross_attn5(q_temp , seg_emb, seg_emb)
             q_temp = self.layer_norm8(q_out + q_temp) # b n c
 
             q_out, _ = self.self_attn4(q_temp, q_temp, q_temp)
@@ -239,9 +269,7 @@ class PCTransformer(nn.Module):
 #             print('q_end.shape', q.shape)
             q[:size_coarse_wo_denoise] = q_temp
             q = q.transpose(0,1)
-#             print('q_end_transpose.shape', q.shape)
-            #end img block
-            
+            # end seg block
             
             return q, coarse, denoise_length
 
@@ -255,13 +283,25 @@ class PCTransformer(nn.Module):
             # forward decoder
             q = self.decoder(q=q, v=mem, q_pos=coarse, v_pos=coor)
             
-            #add img block
-#             print('TEST   ' * 5)
-#             print('q.shape', q.shape)
+            # add seg block
+            norm_plt = points_normals.estimate_pointcloud_normals(
+                coarse,
+                30,
+                disambiguate_directions=False,
+#               use_symeig_workaround=False,
+            )
+            seg_emb, seg_idx = self.segmentator(coarse.transpose(1, 2),
+                                                norm_plt,
+                                                cls_vec)
+            seg_emb = seg_emb.transpose(1, 2).transpose(0, 1)
+            seg_emb = self.get_better_seg_size2(seg_emb)
+       
             q = q.transpose(0,1)
 #             print('q_transpose.shape', q.shape)
             # layer 1: cross + self attention
-            q_out, _ = self.cross_attn4(q , img_feat, img_feat)
+#             print('q_temp.shape', q_temp.shape)
+            
+            q_out, _ = self.cross_attn4(q , seg_emb, seg_emb)
             q = self.layer_norm6(q_out + q) # b n c
 
             q_out, _ = self.self_attn3(q, q, q)
@@ -269,7 +309,7 @@ class PCTransformer(nn.Module):
             q_skip = q
 
             # layer 2: cross + self attention
-            q_out, _ = self.cross_attn5(q , img_feat, img_feat)
+            q_out, _ = self.cross_attn5(q , seg_emb, seg_emb)
             q = self.layer_norm8(q_out + q) # b n c
 
             q_out, _ = self.self_attn4(q, q, q)
@@ -277,18 +317,21 @@ class PCTransformer(nn.Module):
 
             q_out, _ = self.cross_attn6(q, q_skip, q_skip)
             q = self.layer_norm10(q_out + q)
-#             print('q_end.shape', q.shape)
+
             q = q.transpose(0,1)
-#             print('q_end_transpose.shape', q.shape)
-            #end img block
+            # end seg block
 
             return q, coarse, 0
         
 
 ######################################## PoinTr ########################################  
 
+STEP_SIZE = 5
+scheduler_loss = CycleLR(step_size=STEP_SIZE, max_lr=1.0, base_lr=0.01, gamma=0.995)
+
+
 @MODELS.register_module()
-class ImgResNetEncDecAdaPoinTr(nn.Module):
+class ImgEncSegDecAdaPoinTrVariableLoss(nn.Module):
     def __init__(self, config, **kwargs):
         super().__init__()
         self.trans_dim = config.decoder_config.embed_dim
@@ -320,6 +363,9 @@ class ImgResNetEncDecAdaPoinTr(nn.Module):
         )
         self.reduce_map = nn.Linear(self.trans_dim + 1027, self.trans_dim)
         self.build_loss_func()
+        
+        self.alpha_loss = [scheduler_loss.get_lr(last_epoch=epoch) for epoch in range(STEP_SIZE, 600)]
+        print('self.alpha_loss:', self.alpha_loss)
 
     def build_loss_func(self):
         self.loss_func = ChamferDistanceL1()
@@ -340,12 +386,12 @@ class ImgResNetEncDecAdaPoinTr(nn.Module):
         # recon loss
         loss_coarse = self.loss_func(pred_coarse, gt)
         loss_fine = self.loss_func(pred_fine, gt)
-        loss_recon = loss_coarse + loss_fine 
+        loss_recon = loss_coarse * self.alpha_loss[epoch] + loss_fine
         
         return loss_denoised, loss_recon
 
-    def forward(self, xyz, img):
-        q, coarse_point_cloud, denoise_length = self.base_model(xyz, img) # B M C and B M 3
+    def forward(self, xyz, img, cls_vec):
+        q, coarse_point_cloud, denoise_length = self.base_model(xyz, img, cls_vec) # B M C and B M 3
         
         B, M ,C = q.shape
 #         print('xyz', xyz.shape, 'xyz_from_img', xyz_from_img.shape, 'xyz_stack', xyz_stack.shape)
@@ -394,4 +440,4 @@ class ImgResNetEncDecAdaPoinTr(nn.Module):
 
             ret = (coarse_point_cloud, rebuild_points)
             return ret
-    
+        

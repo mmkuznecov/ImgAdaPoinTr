@@ -8,8 +8,8 @@ from torch import nn, einsum
 from pointnet2_ops import pointnet2_utils
 
 from extensions.chamfer_dist import ChamferDistanceL1, ChamferDistanceL1_PM
-from .SnowFlakeNet_utils import PointNet_SA_Module_KNN, MLP_Res, MLP_CONV, fps_subsample, Transformer, MLP_Res, grouping_operation, query_knn
-from .build import MODELS
+from ..SnowFlakeNet_utils import PointNet_SA_Module_KNN, MLP_Res, MLP_CONV, fps_subsample, Transformer, MLP_Res, grouping_operation, query_knn
+from ..build import MODELS
 
 def fps(pc, num):
     fps_idx = pointnet2_utils.furthest_point_sample(pc, num) 

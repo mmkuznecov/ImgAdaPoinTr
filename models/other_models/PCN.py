@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from .build import MODELS
+from ..build import MODELS
 from extensions.chamfer_dist import ChamferDistanceL2
 
 @MODELS.register_module()

@@ -13,15 +13,16 @@ from torchvision import transforms,models
 import numpy as np
 
 from extensions.chamfer_dist import ChamferDistanceL1
-from .build import MODELS, build_model_from_cfg
+from ..build import MODELS, build_model_from_cfg
 from models.Transformer_utils import *
 from utils import misc
 from base_blocks import SelfAttnBlockApi, CrossAttnBlockApi, TransformerEncoder
 from base_blocks import TransformerDecoder, PointTransformerEncoder
 from base_blocks import PointTransformerDecoder, PointTransformerEncoderEntry
 from base_blocks import PointTransformerDecoderEntry, DGCNN_Grouper, Encoder
-from base_blocks import SimpleEncoder, Fold, SimpleRebuildFCLayer,
-from base_blocks import ResNet50, CycleLR
+from base_blocks import SimpleEncoder, Fold, SimpleRebuildFCLayer
+from base_blocks import ResNet18
+
 
 
 ######################################## PCTransformer ########################################   
@@ -91,10 +92,10 @@ class PCTransformer(nn.Module):
             nn.Sigmoid()
         )
         
-        self.im_encoder = ResNet50()
+        self.im_encoder = ResNet18()
         self.img_dim = 384
         self.get_better_size = nn.Sequential(
-            nn.Linear(256, self.img_dim),
+            nn.Linear(196, self.img_dim),
             nn.GELU()
         )
         self.cross_attn1 = nn.MultiheadAttention(self.img_dim, 8)
@@ -134,10 +135,7 @@ class PCTransformer(nn.Module):
         
         #add Img
         img_feat = self.im_encoder(img)
-#         print('img_feat.shape', img_feat.shape)
         img_feat = self.get_better_size(img_feat)
-#         print('img_fea2t.shape', img_feat.shape)
-#         print('x.shape', x.shape)
         img_feat = img_feat.transpose(0,1)
         x = x.transpose(0,1)
         
@@ -159,7 +157,6 @@ class PCTransformer(nn.Module):
         x_out, _ = self.cross_attn3(x, pc_skip, pc_skip)
         x = self.layer_norm5(x_out + x)
         x = x.transpose(0,1)
-#         print('x_end.shape', x.shape)
         #end img block
         
         
@@ -205,17 +202,21 @@ class PCTransformer(nn.Module):
             torch.cat([
                 global_feature.unsqueeze(1).expand(-1, coarse.size(1), -1),
                 coarse], dim = -1)) # b n c
-            
+
             # forward decoder
             q = self.decoder(q=q, v=mem, q_pos=coarse, v_pos=coor)
 
             return q, coarse, 0
         
 
-######################################## ImgResNet50EncAdaPoinTrVariableLossLin ########################################  
+######################################## PoinTr ########################################  
+
+STEP_SIZE = 5
+scheduler_loss = CycleLR(step_size=STEP_SIZE, max_lr=1.0, base_lr=0.01, gamma=0.995)
+    
 
 @MODELS.register_module()
-class ImgResNet50EncAdaPoinTrVariableLossLin(nn.Module):
+class ImgResNetEncAdaPoinTrVariableLoss(nn.Module):
     def __init__(self, config, **kwargs):
         super().__init__()
         self.trans_dim = config.decoder_config.embed_dim
@@ -247,7 +248,8 @@ class ImgResNet50EncAdaPoinTrVariableLossLin(nn.Module):
         )
         self.reduce_map = nn.Linear(self.trans_dim + 1027, self.trans_dim)
         self.build_loss_func()
-        self.alpha_loss = np.linspace(1.0, 0.1, 400)
+        self.alpha_loss = [scheduler_loss.get_lr(last_epoch=epoch) for epoch in range(STEP_SIZE, 600)]
+        print('self.alpha_loss:', self.alpha_loss)
 
     def build_loss_func(self):
         self.loss_func = ChamferDistanceL1()
@@ -275,6 +277,7 @@ class ImgResNet50EncAdaPoinTrVariableLossLin(nn.Module):
     def forward(self, xyz, img):
         q, coarse_point_cloud, denoise_length = self.base_model(xyz, img) # B M C and B M 3
         B, M ,C = q.shape
+
         global_feature = self.increase_dim(q.transpose(1,2)).transpose(1,2) # B M 1024
         global_feature = torch.max(global_feature, dim=1)[0] # B 1024
 
@@ -282,6 +285,7 @@ class ImgResNet50EncAdaPoinTrVariableLossLin(nn.Module):
             global_feature.unsqueeze(-2).expand(-1, M, -1),
             q,
             coarse_point_cloud], dim=-1)  # B M 1027 + C
+
         
         # NOTE: foldingNet
         if self.decoder_type == 'fold':

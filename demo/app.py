@@ -3,11 +3,9 @@ import os
 import sys
 import plotly.graph_objects as go
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
-
 from utils.io_module import IO
-
 
 current_point_cloud = None
 
@@ -44,7 +42,8 @@ def reconstruct_point_cloud():
 
 
 # List of files in the 'samples' directory
-sample_files = ['Select from samples...'] + [f'samples/{file}' for file in os.listdir('samples') if file.endswith('.ply')]
+samples_dir = os.path.join(BASE_DIR, 'demo', 'samples')
+sample_files = ['Select from samples...'] + [f'samples/{file}' for file in os.listdir(samples_dir) if file.endswith('.ply')]
 
 with gr.Blocks() as app:
     gr.Markdown("## 3D Point Cloud Visualization and Reconstruction")
@@ -59,4 +58,4 @@ with gr.Blocks() as app:
     upload_btn.click(visualize_point_cloud, inputs=[file_dropdown, file_uploader], outputs=original_pc_display)
     reconstruct_btn.click(reconstruct_point_cloud, inputs=[], outputs=reconstructed_pc_display)
 
-app.launch()
+app.launch(share=True)

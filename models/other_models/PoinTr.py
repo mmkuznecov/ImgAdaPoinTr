@@ -3,8 +3,8 @@ from torch import nn
 
 from pointnet2_ops import pointnet2_utils
 from extensions.chamfer_dist import ChamferDistanceL1
-from .Transformer import PCTransformer
-from .build import MODELS
+from ..Transformer import PCTransformer
+from ..build import MODELS
 
 
 def fps(pc, num):

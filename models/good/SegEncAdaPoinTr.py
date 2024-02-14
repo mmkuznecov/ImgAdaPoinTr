@@ -3,42 +3,27 @@
 # % Date:01/12/2022
 ###############################################################
 
+import time
 from functools import partial, reduce
 
-import timm
 import torch
 import torch.nn as nn
-from timm.models.layers import DropPath, trunc_normal_
 import torch.nn.functional as F
 from torchvision import transforms, models
-import numpy as np
+from pytorch3d.ops import points_normals
+from timm.models.layers import DropPath, trunc_normal_
 
 from extensions.chamfer_dist import ChamferDistanceL1
-from .build import MODELS, build_model_from_cfg
+from ..build import MODELS, build_model_from_cfg
 from models.Transformer_utils import *
 from utils import misc
+from ..GDANet_ptseg import GDANet
 from base_blocks import SelfAttnBlockApi, CrossAttnBlockApi, TransformerEncoder
 from base_blocks import TransformerDecoder, PointTransformerEncoder
 from base_blocks import PointTransformerDecoder, PointTransformerEncoderEntry
 from base_blocks import PointTransformerDecoderEntry, DGCNN_Grouper, Encoder
-from base_blocks import SimpleEncoder, Fold, SimpleRebuildFCLayer,
-from base_blocks import ConvNext
+from base_blocks import SimpleEncoder, Fold, SimpleRebuildFCLayer
 
-
-
-    
-########################################    ConvNext     ######################################## 
-# class ConvNext(nn.Module):
-#     def __init__(self):
-#         super().__init__()
-#         base = timm.create_model("convnext_small_384_in22ft1k", pretrained=False)
-#         self.base = nn.Sequential(*list(base.children())[:-1])
-        
-#     def forward(self,x):
-#         x = self.base(x)
-#         x = x.reshape(x.size(0), 98, -1)
-#         return x  
-    
 
 ######################################## PCTransformer ########################################   
 class PCTransformer(nn.Module):
@@ -106,10 +91,8 @@ class PCTransformer(nn.Module):
             nn.Linear(256, 1),
             nn.Sigmoid()
         )
-        
-        self.im_encoder = ConvNext()
-        self.img_dim = 384
 
+        self.img_dim = 384
         self.cross_attn1 = nn.MultiheadAttention(self.img_dim, 8)
         self.layer_norm1 = nn.LayerNorm(self.img_dim)
 
@@ -125,6 +108,13 @@ class PCTransformer(nn.Module):
         
         self.cross_attn3 = nn.MultiheadAttention(self.img_dim, 8)
         self.layer_norm5 = nn.LayerNorm(self.img_dim)
+        
+        self.segmentator = GDANet(50)
+        self.img_dim = 384
+        self.get_better_seg_size = nn.Sequential(
+            nn.Linear(128, self.img_dim),
+            nn.GELU()
+        )
 
         self.apply(self._init_weights)
 
@@ -137,7 +127,7 @@ class PCTransformer(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-    def forward(self, xyz, img):
+    def forward(self, xyz, img, cls_vec):
         bs = xyz.size(0)
         coor, f = self.grouper(xyz, self.center_num) # b n c
         pe =  self.pos_embed(coor)
@@ -145,13 +135,21 @@ class PCTransformer(nn.Module):
 
         x = self.encoder(x + pe, coor) # b n c
         
-        #add Img
-        img_feat = self.im_encoder(img)
-        img_feat = img_feat.transpose(0,1)
-        x = x.transpose(0,1)
+        #add Seg
+#         print('x coor xyz self.center_num', x.shape, coor.shape, xyz.shape, self.center_num)
+        start_time = time.time()
+        norm_plt = points_normals.estimate_pointcloud_normals(coor,
+                                                             30,
+                                                             disambiguate_directions=False,
+#                                                              use_symeig_workaround=False,
+                                                            )
+        seg_emb, seg_idx = self.segmentator(coor.transpose(1, 2), norm_plt, cls_vec)
         
+        seg_emb = seg_emb.transpose(1, 2).transpose(0, 1)
+        seg_emb = self.get_better_seg_size(seg_emb)
+        x = x.transpose(0,1)
         # layer 1: cross + self attention
-        x_out, _ = self.cross_attn1(x , img_feat, img_feat)
+        x_out, _ = self.cross_attn1(x , seg_emb, seg_emb)
         x = self.layer_norm1(x_out + x) # b n c
         
         x_out, _ = self.self_attn1(x, x, x)
@@ -159,7 +157,7 @@ class PCTransformer(nn.Module):
         pc_skip = x
         
         # layer 2: cross + self attention
-        x_out, _ = self.cross_attn2(x , img_feat, img_feat)
+        x_out, _ = self.cross_attn2(x , seg_emb, seg_emb)
         x = self.layer_norm3(x_out + x) # b n c
         
         x_out, _ = self.self_attn2(x, x, x)
@@ -168,6 +166,32 @@ class PCTransformer(nn.Module):
         x_out, _ = self.cross_attn3(x, pc_skip, pc_skip)
         x = self.layer_norm5(x_out + x)
         x = x.transpose(0,1)
+#         end seg block
+        
+        
+        
+#         img_feat = img_feat.transpose(0,1)
+#         x = x.transpose(0,1)
+        
+#         # layer 1: cross + self attention
+#         x_out, _ = self.cross_attn1(x , img_feat, img_feat)
+#         x = self.layer_norm1(x_out + x) # b n c
+        
+#         x_out, _ = self.self_attn1(x, x, x)
+#         x = self.layer_norm2(x_out + x)
+#         pc_skip = x
+        
+#         # layer 2: cross + self attention
+#         x_out, _ = self.cross_attn2(x , img_feat, img_feat)
+#         x = self.layer_norm3(x_out + x) # b n c
+        
+#         x_out, _ = self.self_attn2(x, x, x)
+#         x = self.layer_norm4(x_out + x)
+        
+#         x_out, _ = self.cross_attn3(x, pc_skip, pc_skip)
+#         x = self.layer_norm5(x_out + x)
+#         x = x.transpose(0,1)
+#         print('x_end.shape', x.shape)
         #end img block
         
         
@@ -223,7 +247,7 @@ class PCTransformer(nn.Module):
 ######################################## PoinTr ########################################  
 
 @MODELS.register_module()
-class ConvNextEncAdaPoinTrVariableLossLin(nn.Module):
+class SegEncAdaPoinTr(nn.Module):
     def __init__(self, config, **kwargs):
         super().__init__()
         self.trans_dim = config.decoder_config.embed_dim
@@ -255,12 +279,11 @@ class ConvNextEncAdaPoinTrVariableLossLin(nn.Module):
         )
         self.reduce_map = nn.Linear(self.trans_dim + 1027, self.trans_dim)
         self.build_loss_func()
-        self.alpha_loss = np.linspace(1.0, 0.1, 600)
 
     def build_loss_func(self):
         self.loss_func = ChamferDistanceL1()
 
-    def get_loss(self, ret, gt, epoch):
+    def get_loss(self, ret, gt, epoch=1):
         pred_coarse, denoised_coarse, denoised_fine, pred_fine = ret
         
         assert pred_fine.size(1) == gt.size(1)
@@ -276,12 +299,12 @@ class ConvNextEncAdaPoinTrVariableLossLin(nn.Module):
         # recon loss
         loss_coarse = self.loss_func(pred_coarse, gt)
         loss_fine = self.loss_func(pred_fine, gt)
-        loss_recon = loss_coarse  * self.alpha_loss[epoch] + loss_fine 
+        loss_recon = loss_coarse + loss_fine 
         
         return loss_denoised, loss_recon
 
-    def forward(self, xyz, img):
-        q, coarse_point_cloud, denoise_length = self.base_model(xyz, img) # B M C and B M 3
+    def forward(self, xyz, img, cls_vec):
+        q, coarse_point_cloud, denoise_length = self.base_model(xyz, img, cls_vec) # B M C and B M 3
         
         B, M ,C = q.shape
 #         print('xyz', xyz.shape, 'xyz_from_img', xyz_from_img.shape, 'xyz_stack', xyz_stack.shape)

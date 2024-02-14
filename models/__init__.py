@@ -10,8 +10,6 @@ import models.ImgResNetEncDecAdaPoinTr
 import models.ImgResNetEncAdaPoinTr
 import models.ImgResNetEncAdaPoinTrVariableLoss
 import models.ImgResNetFoldNetAdaPoinTr
-import models.ImgResNetAdaPoinTrWoSequence
-import models.ImgResNetFoldNetAdaPoinTr2
 import models.SegEncAdaPoinTr
 import models.SegEncDecAdaPoinTr
 import models.SegEncSimAdaPoinTr
