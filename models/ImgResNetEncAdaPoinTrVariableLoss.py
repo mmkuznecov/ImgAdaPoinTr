@@ -8,6 +8,9 @@ from functools import partial, reduce
 import torch
 import torch.nn as nn
 from timm.models.layers import DropPath, trunc_normal_
+import torch.nn.functional as F
+from torchvision import transforms,models
+import numpy as np
 
 from extensions.chamfer_dist import ChamferDistanceL1
 from ..build import MODELS, build_model_from_cfg
@@ -18,6 +21,8 @@ from base_blocks import TransformerDecoder, PointTransformerEncoder
 from base_blocks import PointTransformerDecoder, PointTransformerEncoderEntry
 from base_blocks import PointTransformerDecoderEntry, DGCNN_Grouper, Encoder
 from base_blocks import SimpleEncoder, Fold, SimpleRebuildFCLayer
+from base_blocks import ResNet18
+
 
 
 ######################################## PCTransformer ########################################   
@@ -86,6 +91,28 @@ class PCTransformer(nn.Module):
             nn.Linear(256, 1),
             nn.Sigmoid()
         )
+        
+        self.im_encoder = ResNet18()
+        self.img_dim = 384
+        self.get_better_size = nn.Sequential(
+            nn.Linear(196, self.img_dim),
+            nn.GELU()
+        )
+        self.cross_attn1 = nn.MultiheadAttention(self.img_dim, 8)
+        self.layer_norm1 = nn.LayerNorm(self.img_dim)
+
+        self.self_attn1 = nn.MultiheadAttention(self.img_dim, 8)
+        self.layer_norm2 = nn.LayerNorm(self.img_dim)
+        
+        self.cross_attn2 = nn.MultiheadAttention(self.img_dim, 8)
+        self.layer_norm3 = nn.LayerNorm(self.img_dim)
+        
+        self.self_attn2 = nn.MultiheadAttention(self.img_dim, 8)
+        self.layer_norm4 = nn.LayerNorm(self.img_dim)
+        
+        
+        self.cross_attn3 = nn.MultiheadAttention(self.img_dim, 8)
+        self.layer_norm5 = nn.LayerNorm(self.img_dim)
 
         self.apply(self._init_weights)
 
@@ -98,13 +125,41 @@ class PCTransformer(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-    def forward(self, xyz):
+    def forward(self, xyz, img):
         bs = xyz.size(0)
         coor, f = self.grouper(xyz, self.center_num) # b n c
         pe =  self.pos_embed(coor)
         x = self.input_proj(f)
 
         x = self.encoder(x + pe, coor) # b n c
+        
+        #add Img
+        img_feat = self.im_encoder(img)
+        img_feat = self.get_better_size(img_feat)
+        img_feat = img_feat.transpose(0,1)
+        x = x.transpose(0,1)
+        
+        # layer 1: cross + self attention
+        x_out, _ = self.cross_attn1(x , img_feat, img_feat)
+        x = self.layer_norm1(x_out + x) # b n c
+        
+        x_out, _ = self.self_attn1(x, x, x)
+        x = self.layer_norm2(x_out + x)
+        pc_skip = x
+        
+        # layer 2: cross + self attention
+        x_out, _ = self.cross_attn2(x , img_feat, img_feat)
+        x = self.layer_norm3(x_out + x) # b n c
+        
+        x_out, _ = self.self_attn2(x, x, x)
+        x = self.layer_norm4(x_out + x)
+        
+        x_out, _ = self.cross_attn3(x, pc_skip, pc_skip)
+        x = self.layer_norm5(x_out + x)
+        x = x.transpose(0,1)
+        #end img block
+        
+        
         global_feature = self.increase_dim(x) # B 1024 N 
         global_feature = torch.max(global_feature, dim=1)[0] # B 1024
 
@@ -125,6 +180,8 @@ class PCTransformer(nn.Module):
             # first pick some point : 64?
             picked_points = misc.fps(xyz, 64)
             picked_points = misc.jitter_points(picked_points)
+            size_coarse_wo_denoise = coarse.shape[1]
+#             print(size_coarse_wo_denoise)
             coarse = torch.cat([coarse, picked_points], dim=1) # B 256+64 3?
             denoise_length = 64     
 
@@ -136,7 +193,7 @@ class PCTransformer(nn.Module):
 
             # forward decoder
             q = self.decoder(q=q, v=mem, q_pos=coarse, v_pos=coor, denoise_length=denoise_length)
-
+            
             return q, coarse, denoise_length
 
         else:
@@ -145,16 +202,21 @@ class PCTransformer(nn.Module):
             torch.cat([
                 global_feature.unsqueeze(1).expand(-1, coarse.size(1), -1),
                 coarse], dim = -1)) # b n c
-            
+
             # forward decoder
             q = self.decoder(q=q, v=mem, q_pos=coarse, v_pos=coor)
 
             return q, coarse, 0
+        
 
 ######################################## PoinTr ########################################  
 
+STEP_SIZE = 5
+scheduler_loss = CycleLR(step_size=STEP_SIZE, max_lr=1.0, base_lr=0.01, gamma=0.995)
+    
+
 @MODELS.register_module()
-class AdaPoinTr(nn.Module):
+class ImgResNetEncAdaPoinTrVariableLoss(nn.Module):
     def __init__(self, config, **kwargs):
         super().__init__()
         self.trans_dim = config.decoder_config.embed_dim
@@ -186,24 +248,21 @@ class AdaPoinTr(nn.Module):
         )
         self.reduce_map = nn.Linear(self.trans_dim + 1027, self.trans_dim)
         self.build_loss_func()
+        self.alpha_loss = [scheduler_loss.get_lr(last_epoch=epoch) for epoch in range(STEP_SIZE, 600)]
+        print('self.alpha_loss:', self.alpha_loss)
 
     def build_loss_func(self):
         self.loss_func = ChamferDistanceL1()
 
-    def get_loss(self, ret, gt, epoch=1):
+    def get_loss(self, ret, gt, epoch):
         pred_coarse, denoised_coarse, denoised_fine, pred_fine = ret
-        print('denoised_coarse and fine', denoised_coarse.shape, denoised_fine.shape)
-        print('pred_coarse and fine', pred_coarse.shape, pred_fine.shape)
+        
         assert pred_fine.size(1) == gt.size(1)
-
+        
         # denoise loss
-        print('self.factor', self.factor)
         idx = knn_point(self.factor, gt, denoised_coarse) # B n k 
-        print('idx', idx.shape)
-        denoised_target = index_points(gt, idx) # B n k 3
-        print('denoised_target', denoised_target.shape)
+        denoised_target = index_points(gt, idx) # B n k 3 
         denoised_target = denoised_target.reshape(gt.size(0), -1, 3)
-        print('denoised_target_2', denoised_target.shape)
         assert denoised_target.size(1) == denoised_fine.size(1)
         loss_denoised = self.loss_func(denoised_fine, denoised_target)
         loss_denoised = loss_denoised * 0.5
@@ -211,13 +270,12 @@ class AdaPoinTr(nn.Module):
         # recon loss
         loss_coarse = self.loss_func(pred_coarse, gt)
         loss_fine = self.loss_func(pred_fine, gt)
-        loss_recon = loss_coarse + loss_fine
+        loss_recon = loss_coarse  * self.alpha_loss[epoch] + loss_fine 
 
         return loss_denoised, loss_recon
 
-    def forward(self, xyz):
-        q, coarse_point_cloud, denoise_length = self.base_model(xyz) # B M C and B M 3
-    
+    def forward(self, xyz, img):
+        q, coarse_point_cloud, denoise_length = self.base_model(xyz, img) # B M C and B M 3
         B, M ,C = q.shape
 
         global_feature = self.increase_dim(q.transpose(1,2)).transpose(1,2) # B M 1024
@@ -263,4 +321,4 @@ class AdaPoinTr(nn.Module):
 
             ret = (coarse_point_cloud, rebuild_points)
             return ret
-            
+        
