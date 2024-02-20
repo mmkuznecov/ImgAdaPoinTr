@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
-from utils.GDANet_util import local_operator_withnorm, local_operator, GDM, SGCAM
+from .GDANet_util import local_operator_withnorm, local_operator, GDM, SGCAM
 
 
 class GDANet(nn.Module):
