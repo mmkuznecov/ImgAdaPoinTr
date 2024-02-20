@@ -15,15 +15,17 @@ tree_arch[4] = [4, 8, 8, 8]
 tree_arch[6] = [2, 4, 4, 4, 4, 4]
 tree_arch[8] = [2, 2, 2, 2, 2, 4, 4, 4]
 
+
 def get_arch(nlevels, npts):
     logmult = int(math.log2(npts/2048))
     assert 2048*(2**(logmult)) == npts, "Number of points is %d, expected 2048x(2^n)" % (npts)
     arch = tree_arch[nlevels]
     while logmult > 0:
-        last_min_pos = np.where(arch==np.min(arch))[0][-1]
-        arch[last_min_pos]*=2
+        last_min_pos = np.where(arch == np.min(arch))[0][-1]
+        arch[last_min_pos] *= 2
         logmult -= 1
     return arch
+
 
 @MODELS.register_module()
 class TopNet(nn.Module):
@@ -70,7 +72,8 @@ class TopNet(nn.Module):
         loss_coarse = self.loss_func(ret[0], gt)
         loss_fine = self.loss_func(ret[1], gt)
         return loss_coarse, loss_fine
-    
+
+
     @staticmethod
     def get_tree_layer(in_channel, out_channel, node):
         return nn.Sequential(
@@ -87,22 +90,22 @@ class TopNet(nn.Module):
         )
 
     def forward(self, xyz):
-        bs , n , _ = xyz.shape
+        bs, n, _ = xyz.shape
         # encoder
-        feature = self.first_conv(xyz.transpose(2,1))  # B 256 n
-        feature_global = torch.max(feature,dim=2,keepdim=True)[0]  # B 256 1
-        feature = torch.cat([feature_global.expand(-1,-1,n), feature], dim=1)# B 512 n
+        feature = self.first_conv(xyz.transpose(2, 1))  # B 256 n
+        feature_global = torch.max(feature, dim=2, keepdim=True)[0]  # B 256 1
+        feature = torch.cat([feature_global.expand(-1, -1, n), feature], dim=1)# B 512 n
         feature = self.second_conv(feature) # B 1024 n
-        feature_global = torch.max(feature,dim=2,keepdim=False)[0] # B 1024
+        feature_global = torch.max(feature, dim=2, keepdim=False)[0] # B 1024
         # decoder
-        level10 = self.root_layer(feature_global).reshape(-1, self.node_feature ,int(self.tarch[0])) # B 8 node
+        level10 = self.root_layer(feature_global).reshape(-1, self.node_feature, int(self.tarch[0])) # B 8 node
         outs = [level10,]
         for i in range(1, self.nlevels):
             last_level = outs[-1]
-            expand_feature = feature_global.unsqueeze(2).expand(-1,-1,last_level.shape[2])
+            expand_feature = feature_global.unsqueeze(2).expand(-1, -1, last_level.shape[2])
             if i == self.nlevels - 1:
                 layer_feature = self.leaf_layer(torch.cat([expand_feature,last_level],dim=1)).reshape(bs, 3 ,-1)
             else:
-                layer_feature = self.feature_layers[i-1](torch.cat([expand_feature,last_level],dim=1)).reshape(bs, self.node_feature, -1)
+                layer_feature = self.feature_layers[i-1](torch.cat([expand_feature, last_level], dim=1)).reshape(bs, self.node_feature, -1)
             outs.append(nn.Tanh()(layer_feature)) 
-        return (outs[-1].transpose(1,2).contiguous(), outs[-1].transpose(1,2).contiguous())
+        return (outs[-1].transpose(1, 2).contiguous(), outs[-1].transpose(1,2).contiguous())
