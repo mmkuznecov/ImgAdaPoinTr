@@ -17,7 +17,7 @@ from extensions.chamfer_dist import ChamferDistanceL1
 from ..build import MODELS, build_model_from_cfg
 from models.Transformer_utils import *
 from utils import misc
-from ..GDANet_ptseg import GDANet
+from ..segmentation.GDANet_ptseg import GDANet
 from base_blocks import SelfAttnBlockApi, CrossAttnBlockApi, TransformerEncoder
 from base_blocks import TransformerDecoder, PointTransformerEncoder
 from base_blocks import PointTransformerDecoder, PointTransformerEncoderEntry
