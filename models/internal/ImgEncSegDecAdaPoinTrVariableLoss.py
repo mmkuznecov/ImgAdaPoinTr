@@ -23,7 +23,8 @@ from base_blocks import TransformerDecoder, PointTransformerEncoder
 from base_blocks import PointTransformerDecoder, PointTransformerEncoderEntry
 from base_blocks import PointTransformerDecoderEntry, DGCNN_Grouper, Encoder
 from base_blocks import SimpleEncoder, Fold, SimpleRebuildFCLayer
-from base_blocks import ResNet18, CycleLR
+from base_blocks import CycleLR
+from image_encoders import ResNet18
 
 
 ######################################## PCTransformer ########################################   
