@@ -14,7 +14,7 @@ from extensions.gridding import Gridding, GriddingReverse
 from extensions.cubic_feature_sampling import CubicFeatureSampling
 from extensions.chamfer_dist import ChamferDistanceL2
 from extensions.gridding_loss import GriddingLoss
-from .build import MODELS
+from ..build import MODELS
 
 
 

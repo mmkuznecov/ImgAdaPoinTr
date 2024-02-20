@@ -4,10 +4,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from .build import MODELS
+from ..build import MODELS
 from extensions.chamfer_dist import ChamferDistanceL2
-
-
 
 tree_arch = {}
 tree_arch[2] = [32, 64]
