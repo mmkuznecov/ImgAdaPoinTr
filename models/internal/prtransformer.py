@@ -125,6 +125,18 @@ class PCTransformer(nn.Module):
         self.layer_norm_img = nn.LayerNorm(self.img_dim)
         self.self_attn_img = nn.MultiheadAttention(self.img_dim, 8)
         self.layer_norm_img2 = nn.LayerNorm(self.img_dim)
+        
+    def init_img_attention_layers(self):
+        self.cross_attn_img1 = nn.MultiheadAttention(self.img_dim, 8)
+        self.layer_norm_img1 = nn.LayerNorm(self.img_dim)
+        self.self_attn_img1 = nn.MultiheadAttention(self.img_dim, 8)
+        self.layer_norm_img2 = nn.LayerNorm(self.img_dim)
+        self.cross_attn_img2 = nn.MultiheadAttention(self.img_dim, 8)
+        self.layer_norm_img3 = nn.LayerNorm(self.img_dim)
+        self.self_attn_img2 = nn.MultiheadAttention(self.img_dim, 8)
+        self.layer_norm_img4 = nn.LayerNorm(self.img_dim)
+        self.cross_attn_img3 = nn.MultiheadAttention(self.img_dim, 8)
+        self.layer_norm_img5 = nn.LayerNorm(self.img_dim)
 
     def init_seg_attention_layers(self):
         self.cross_attn_seg = nn.MultiheadAttention(self.img_dim, 8)
@@ -149,11 +161,30 @@ class PCTransformer(nn.Module):
             x = x.transpose(0, 1)
 
             # Image feature attention
-            x, _ = self.cross_attn_img(x, img_feat, img_feat)
-            x = self.layer_norm_img(x)
-            x, _ = self.self_attn_img(x, x, x)
-            x = self.layer_norm_img2(x + x)
-            x = x.transpose(0, 1)
+#             x, _ = self.cross_attn_img(x, img_feat, img_feat)
+#             x = self.layer_norm_img(x)
+#             x, _ = self.self_attn_img(x, x, x)
+#             x = self.layer_norm_img2(x + x)
+#             x = x.transpose(0, 1)          
+        
+            # layer 1: cross + self attention
+            x_out, _ = self.cross_attn_img1(x , img_feat, img_feat)
+            x = self.layer_norm_img1(x_out + x) # b n c
+
+            x_out, _ = self.self_attn_img1(x, x, x)
+            x = self.layer_norm_img2(x_out + x)
+            pc_skip = x
+
+            # layer 2: cross + self attention
+            x_out, _ = self.cross_attn_img2(x , img_feat, img_feat)
+            x = self.layer_norm_img3(x_out + x) # b n c
+
+            x_out, _ = self.self_attn_img2(x, x, x)
+            x = self.layer_norm_img4(x_out + x)
+
+            x_out, _ = self.cross_attn_img3(x, pc_skip, pc_skip)
+            x = self.layer_norm_img5(x_out + x)
+            x = x.transpose(0,1)
 
         # Process segmentation features if enabled
         if hasattr(self.config, 'use_seg_features') and self.config.use_seg_features and cls_vec is not None:
@@ -244,7 +275,7 @@ class PCTransformerImgOnly(PCTransformer):
         # Adjust config to enable image features
         config.use_img_features = True
         config.use_seg_features = False  # Ensure segmentation features are disabled
-        config.enable_denoising = True
+        config.enable_denoising = 0
         config.enable_segmentation_enhancement = False
         super().__init__(config)
 
