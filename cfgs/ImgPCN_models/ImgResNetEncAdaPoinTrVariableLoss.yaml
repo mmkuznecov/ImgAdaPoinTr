@@ -62,7 +62,7 @@ model : {
     }
 }
   
-total_bs : 64
+total_bs : 1
 step_per_update : 1
 max_epoch : 600
 

@@ -1,6 +1,6 @@
 from .build import DATASETS
 from .BasePCNDataset import BasePCNDataset
-import data_transforms
+from . import data_transforms
 
 SEG_LIST = ['02691156', '03001627', '03636649', '04379243']
 

@@ -1,6 +1,6 @@
 from .build import DATASETS
 from .BasePCNDataset import BasePCNDataset
-import data_transforms
+from . import data_transforms
 
 
 @DATASETS.register_module()

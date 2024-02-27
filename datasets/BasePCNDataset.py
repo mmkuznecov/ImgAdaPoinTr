@@ -3,7 +3,6 @@ import torch.utils.data as data
 import numpy as np
 import os
 import sys
-import data_transforms
 import random
 import json
 from PIL import Image
@@ -64,11 +63,15 @@ class BasePCNDataset(data.Dataset):
         for dc in self.dataset_categories:
             samples = dc[subset]
             for s in samples:
+#                 print('s', s)
+#                 print("dc['taxonomy_id']", dc['taxonomy_id'])
+#                 print([self.partial_points_path % (subset, dc['taxonomy_id'], s, i) for i in range(n_renderings)])
+#                 print('gt_path', self.complete_points_path % (subset, dc['taxonomy_id'], s, s))
                 file_list_details = {
                     'taxonomy_id': dc['taxonomy_id'],
                     'model_id': s,
                     'partial_path': [self.partial_points_path % (subset, dc['taxonomy_id'], s, i) for i in range(n_renderings)],
-                    'gt_path': self.complete_points_path % (subset, dc['taxonomy_id'], s),
+                    'gt_path': self.complete_points_path % (subset, dc['taxonomy_id'], s, s),
                 }
                 if self.include_images:
                     img_sample = random.sample(self.img_idxs, self.num_imgs_per_obj)

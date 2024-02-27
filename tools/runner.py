@@ -313,7 +313,7 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
     category_metrics = dict()
     n_samples = len(test_dataloader) # bs is 1
 
-    interval =  n_samples // 10
+    interval =  n_samples // 1#0
     loss_L1 = []
     loss_L2 = []
 
