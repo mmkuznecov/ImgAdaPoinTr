@@ -77,10 +77,11 @@ class BasePCNDataset(data.Dataset):
                     img_sample = random.sample(self.img_idxs, self.num_imgs_per_obj)
                     for img_idx in img_sample:
                         file_list_details['img_path'] = self.img_path % (subset, dc['taxonomy_id'], s, img_idx)
-                if self.include_segmentation and dc['taxonomy_id'] in self.SEG_LIST:
-                    cls_idx = self.CLASSES[dc['taxonomy_id']]
+                if self.include_segmentation:
                     cls_vec = np.zeros(16)
-                    cls_vec[cls_idx] = 1
+                    if dc['taxonomy_id'] in self.SEG_LIST:
+                        cls_idx = self.CLASSES[dc['taxonomy_id']]
+                        cls_vec[cls_idx] = 1
                     file_list_details['cls_vec'] = cls_vec
                 file_list.append(file_list_details)
         return file_list
@@ -102,15 +103,20 @@ class BasePCNDataset(data.Dataset):
         if self.include_images:
             img = Image.open(sample['img_path']).convert('RGB')
             img = self.img_transform(img)
-            return_data = (data['partial'], data['gt'], img)
+            data_img = (data['partial'], data['gt'], img)
         else:
-            return_data = (data['partial'], data['gt'])
+            data_img = (data['partial'], data['gt'])
 
-        if self.include_segmentation:
+        # Conditional inclusion of cls_vec
+        if 'cls_vec' in sample:
             cls_vec = torch.from_numpy(sample['cls_vec']).float()
-            return_data += (cls_vec,)
+            return_data = (*data_img, cls_vec)
+        else:
+            return_data = data_img
 
         return sample['taxonomy_id'], sample['model_id'], return_data
+
+
 
     def __len__(self):
         return len(self.file_list)

@@ -1,8 +1,3 @@
-##############################################################
-# % Author: Castle
-# % Date:01/12/2022
-###############################################################
-
 import time
 from functools import partial, reduce
 
@@ -23,228 +18,18 @@ from ..base_blocks import TransformerDecoder, PointTransformerEncoder
 from ..base_blocks import PointTransformerDecoder, PointTransformerEncoderEntry
 from ..base_blocks import PointTransformerDecoderEntry, DGCNN_Grouper, Encoder
 from ..base_blocks import SimpleEncoder, Fold, SimpleRebuildFCLayer
+from .prtransformer import PCTransformer
 
 
-######################################## PCTransformer ########################################   
-class PCTransformer(nn.Module):
+class PCTransformerSegOnly(PCTransformer):
     def __init__(self, config):
-        super().__init__()
-        encoder_config = config.encoder_config
-        decoder_config = config.decoder_config
-        self.center_num  = getattr(config, 'center_num', [512, 128])
-        self.encoder_type = config.encoder_type
-        assert self.encoder_type in ['graph', 'pn'], f'unexpected encoder_type {self.encoder_type}'
-
-        in_chans = 3
-        self.num_query = query_num = config.num_query
-        global_feature_dim = config.global_feature_dim
-
-        print_log(f'Transformer with config {config}', logger='MODEL')
-        # base encoder
-        if self.encoder_type == 'graph':
-            self.grouper = DGCNN_Grouper(k = 16)
-        else:
-            self.grouper = SimpleEncoder(k = 32, embed_dims=512)
-        self.pos_embed = nn.Sequential(
-            nn.Linear(in_chans, 128),
-            nn.GELU(),
-            nn.Linear(128, encoder_config.embed_dim)
-        )  
-        self.input_proj = nn.Sequential(
-            nn.Linear(self.grouper.num_features, 512),
-            nn.GELU(),
-            nn.Linear(512, encoder_config.embed_dim)
-        )
-        # Coarse Level 1 : Encoder
-        self.encoder = PointTransformerEncoderEntry(encoder_config)
-
-        self.increase_dim = nn.Sequential(
-            nn.Linear(encoder_config.embed_dim, 1024),
-            nn.GELU(),
-            nn.Linear(1024, global_feature_dim))
-        # query generator
-        self.coarse_pred = nn.Sequential(
-            nn.Linear(global_feature_dim, 1024),
-            nn.GELU(),
-            nn.Linear(1024, 3 * query_num)
-        )
-        self.mlp_query = nn.Sequential(
-            nn.Linear(global_feature_dim + 3, 1024),
-            nn.GELU(),
-            nn.Linear(1024, 1024),
-            nn.GELU(),
-            nn.Linear(1024, decoder_config.embed_dim)
-        )
-        # assert decoder_config.embed_dim == encoder_config.embed_dim
-        if decoder_config.embed_dim == encoder_config.embed_dim:
-            self.mem_link = nn.Identity()
-        else:
-            self.mem_link = nn.Linear(encoder_config.embed_dim, decoder_config.embed_dim)
-        # Coarse Level 2 : Decoder
-        self.decoder = PointTransformerDecoderEntry(decoder_config)
- 
-        self.query_ranking = nn.Sequential(
-            nn.Linear(3, 256),
-            nn.GELU(),
-            nn.Linear(256, 256),
-            nn.GELU(),
-            nn.Linear(256, 1),
-            nn.Sigmoid()
-        )
-
-        self.img_dim = 384
-        self.cross_attn1 = nn.MultiheadAttention(self.img_dim, 8)
-        self.layer_norm1 = nn.LayerNorm(self.img_dim)
-
-        self.self_attn1 = nn.MultiheadAttention(self.img_dim, 8)
-        self.layer_norm2 = nn.LayerNorm(self.img_dim)
+        # Adjust config to enable segmentation features
+        config.use_img_features = False  # Ensure image features are disabled
+        config.use_seg_features = True
+        config.enable_denoising = True
+        config.enable_segmentation_enhancement = True
+        super().__init__(config)
         
-        self.cross_attn2 = nn.MultiheadAttention(self.img_dim, 8)
-        self.layer_norm3 = nn.LayerNorm(self.img_dim)
-        
-        self.self_attn2 = nn.MultiheadAttention(self.img_dim, 8)
-        self.layer_norm4 = nn.LayerNorm(self.img_dim)
-        
-        
-        self.cross_attn3 = nn.MultiheadAttention(self.img_dim, 8)
-        self.layer_norm5 = nn.LayerNorm(self.img_dim)
-        
-        self.segmentator = GDANet(50)
-        self.img_dim = 384
-        self.get_better_seg_size = nn.Sequential(
-            nn.Linear(128, self.img_dim),
-            nn.GELU()
-        )
-
-        self.apply(self._init_weights)
-
-    def _init_weights(self, m):
-        if isinstance(m, nn.Linear):
-            trunc_normal_(m.weight, std=.02)
-            if isinstance(m, nn.Linear) and m.bias is not None:
-                nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.LayerNorm):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
-
-    def forward(self, xyz, img, cls_vec):
-        bs = xyz.size(0)
-        coor, f = self.grouper(xyz, self.center_num) # b n c
-        pe =  self.pos_embed(coor)
-        x = self.input_proj(f)
-
-        x = self.encoder(x + pe, coor) # b n c
-        
-        #add Seg
-#         print('x coor xyz self.center_num', x.shape, coor.shape, xyz.shape, self.center_num)
-        start_time = time.time()
-        norm_plt = points_normals.estimate_pointcloud_normals(coor,
-                                                             30,
-                                                             disambiguate_directions=False,
-#                                                              use_symeig_workaround=False,
-                                                            )
-        seg_emb, seg_idx = self.segmentator(coor.transpose(1, 2), norm_plt, cls_vec)
-        
-        seg_emb = seg_emb.transpose(1, 2).transpose(0, 1)
-        seg_emb = self.get_better_seg_size(seg_emb)
-        x = x.transpose(0,1)
-        # layer 1: cross + self attention
-        x_out, _ = self.cross_attn1(x , seg_emb, seg_emb)
-        x = self.layer_norm1(x_out + x) # b n c
-        
-        x_out, _ = self.self_attn1(x, x, x)
-        x = self.layer_norm2(x_out + x)
-        pc_skip = x
-        
-        # layer 2: cross + self attention
-        x_out, _ = self.cross_attn2(x , seg_emb, seg_emb)
-        x = self.layer_norm3(x_out + x) # b n c
-        
-        x_out, _ = self.self_attn2(x, x, x)
-        x = self.layer_norm4(x_out + x)
-        
-        x_out, _ = self.cross_attn3(x, pc_skip, pc_skip)
-        x = self.layer_norm5(x_out + x)
-        x = x.transpose(0,1)
-#         end seg block
-        
-        
-        
-#         img_feat = img_feat.transpose(0,1)
-#         x = x.transpose(0,1)
-        
-#         # layer 1: cross + self attention
-#         x_out, _ = self.cross_attn1(x , img_feat, img_feat)
-#         x = self.layer_norm1(x_out + x) # b n c
-        
-#         x_out, _ = self.self_attn1(x, x, x)
-#         x = self.layer_norm2(x_out + x)
-#         pc_skip = x
-        
-#         # layer 2: cross + self attention
-#         x_out, _ = self.cross_attn2(x , img_feat, img_feat)
-#         x = self.layer_norm3(x_out + x) # b n c
-        
-#         x_out, _ = self.self_attn2(x, x, x)
-#         x = self.layer_norm4(x_out + x)
-        
-#         x_out, _ = self.cross_attn3(x, pc_skip, pc_skip)
-#         x = self.layer_norm5(x_out + x)
-#         x = x.transpose(0,1)
-#         print('x_end.shape', x.shape)
-        #end img block
-        
-        
-        global_feature = self.increase_dim(x) # B 1024 N 
-        global_feature = torch.max(global_feature, dim=1)[0] # B 1024
-
-        coarse = self.coarse_pred(global_feature).reshape(bs, -1, 3)
-
-        coarse_inp = misc.fps(xyz, self.num_query//2) # B 128 3
-        coarse = torch.cat([coarse, coarse_inp], dim=1) # B 224+128 3?
-
-        mem = self.mem_link(x)
-
-        # query selection
-        query_ranking = self.query_ranking(coarse) # b n 1
-        idx = torch.argsort(query_ranking, dim=1, descending=True) # b n 1
-        coarse = torch.gather(coarse, 1, idx[:,:self.num_query].expand(-1, -1, coarse.size(-1)))
-
-        if self.training:
-            # add denoise task
-            # first pick some point : 64?
-            picked_points = misc.fps(xyz, 64)
-            picked_points = misc.jitter_points(picked_points)
-            size_coarse_wo_denoise = coarse.shape[1]
-#             print(size_coarse_wo_denoise)
-            coarse = torch.cat([coarse, picked_points], dim=1) # B 256+64 3?
-            denoise_length = 64     
-
-            # produce query
-            q = self.mlp_query(
-            torch.cat([
-                global_feature.unsqueeze(1).expand(-1, coarse.size(1), -1),
-                coarse], dim = -1)) # b n c
-
-            # forward decoder
-            q = self.decoder(q=q, v=mem, q_pos=coarse, v_pos=coor, denoise_length=denoise_length)
-            
-            return q, coarse, denoise_length
-
-        else:
-            # produce query
-            q = self.mlp_query(
-            torch.cat([
-                global_feature.unsqueeze(1).expand(-1, coarse.size(1), -1),
-                coarse], dim = -1)) # b n c
-            
-            # forward decoder
-            q = self.decoder(q=q, v=mem, q_pos=coarse, v_pos=coor)
-
-            return q, coarse, 0
-        
-
-######################################## PoinTr ########################################  
 
 @MODELS.register_module()
 class SegEncAdaPoinTr(nn.Module):
@@ -258,7 +43,7 @@ class SegEncAdaPoinTr(nn.Module):
         assert self.decoder_type in ['fold', 'fc'], f'unexpected decoder_type {self.decoder_type}'
 
         self.fold_step = 8
-        self.base_model = PCTransformer(config)
+        self.base_model = PCTransformerSegOnly(config)
         
         if self.decoder_type == 'fold':
             self.factor = self.fold_step**2
@@ -353,4 +138,3 @@ class SegEncAdaPoinTr(nn.Module):
 
             ret = (coarse_point_cloud, rebuild_points)
             return ret
-        

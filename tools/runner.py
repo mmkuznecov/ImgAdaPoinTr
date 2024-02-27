@@ -60,7 +60,7 @@ def run_net(args, config, train_writer=None, val_writer=None):
         new_state_dict = OrderedDict()
         for layer in state_dict:
             new_state_dict[layer.replace('module.', '')] = state_dict[layer]
-        base_model.base_model.segmentator.load_state_dict(new_state_dict)
+        base_model.base_model.segmentator.load_state_dict(new_state_dict, strict=False)
         for parameter in base_model.base_model.segmentator.parameters():
             parameter.requires_grad = False
         print('Finish load Segmentator weights')
