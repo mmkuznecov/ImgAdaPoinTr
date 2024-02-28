@@ -63,10 +63,6 @@ class BasePCNDataset(data.Dataset):
         for dc in self.dataset_categories:
             samples = dc[subset]
             for s in samples:
-#                 print('s', s)
-#                 print("dc['taxonomy_id']", dc['taxonomy_id'])
-#                 print([self.partial_points_path % (subset, dc['taxonomy_id'], s, i) for i in range(n_renderings)])
-#                 print('gt_path', self.complete_points_path % (subset, dc['taxonomy_id'], s, s))
                 file_list_details = {
                     'taxonomy_id': dc['taxonomy_id'],
                     'model_id': s,

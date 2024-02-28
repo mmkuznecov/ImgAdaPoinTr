@@ -18,7 +18,7 @@ from ..base_blocks import TransformerDecoder, PointTransformerEncoder
 from ..base_blocks import PointTransformerDecoder, PointTransformerEncoderEntry
 from ..base_blocks import PointTransformerDecoderEntry, DGCNN_Grouper, Encoder
 from ..base_blocks import SimpleEncoder, Fold, SimpleRebuildFCLayer
-from .prtransformer import PCTransformer
+from .pctransformer import PCTransformer
 
 
 class PCTransformerSegOnly(PCTransformer):
@@ -28,6 +28,8 @@ class PCTransformerSegOnly(PCTransformer):
         config.use_seg_features = True
         config.enable_denoising = True
         config.enable_segmentation_enhancement = True
+        config.seg_before_enc = True
+        config.seg_before_dec = False
         super().__init__(config)
         
 

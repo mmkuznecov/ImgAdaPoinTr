@@ -119,12 +119,6 @@ class PCTransformer(nn.Module):
         elif isinstance(m, nn.LayerNorm):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
-
-    def init_img_attention_layers(self):
-        self.cross_attn_img = nn.MultiheadAttention(self.img_dim, 8)
-        self.layer_norm_img = nn.LayerNorm(self.img_dim)
-        self.self_attn_img = nn.MultiheadAttention(self.img_dim, 8)
-        self.layer_norm_img2 = nn.LayerNorm(self.img_dim)
         
     def init_img_attention_layers(self):
         self.cross_attn_img1 = nn.MultiheadAttention(self.img_dim, 8)
@@ -139,10 +133,16 @@ class PCTransformer(nn.Module):
         self.layer_norm_img5 = nn.LayerNorm(self.img_dim)
 
     def init_seg_attention_layers(self):
-        self.cross_attn_seg = nn.MultiheadAttention(self.img_dim, 8)
-        self.layer_norm_seg = nn.LayerNorm(self.img_dim)
-        self.self_attn_seg = nn.MultiheadAttention(self.img_dim, 8)
+        self.cross_attn_seg1 = nn.MultiheadAttention(self.img_dim, 8)
+        self.layer_norm_seg1 = nn.LayerNorm(self.img_dim)
+        self.self_attn_seg1 = nn.MultiheadAttention(self.img_dim, 8)
         self.layer_norm_seg2 = nn.LayerNorm(self.img_dim)
+        self.cross_attn_seg2 = nn.MultiheadAttention(self.img_dim, 8)
+        self.layer_norm_seg3 = nn.LayerNorm(self.img_dim)
+        self.self_attn_seg2 = nn.MultiheadAttention(self.img_dim, 8)
+        self.layer_norm_seg4 = nn.LayerNorm(self.img_dim)
+        self.cross_attn_seg3 = nn.MultiheadAttention(self.img_dim, 8)
+        self.layer_norm_seg5 = nn.LayerNorm(self.img_dim)
         
     def forward(self, xyz, img=None, cls_vec=None):
 
@@ -160,13 +160,7 @@ class PCTransformer(nn.Module):
             img_feat = img_feat.transpose(0, 1)
             x = x.transpose(0, 1)
 
-            # Image feature attention
-#             x, _ = self.cross_attn_img(x, img_feat, img_feat)
-#             x = self.layer_norm_img(x)
-#             x, _ = self.self_attn_img(x, x, x)
-#             x = self.layer_norm_img2(x + x)
-#             x = x.transpose(0, 1)          
-        
+            # Image feature attention   
             # layer 1: cross + self attention
             x_out, _ = self.cross_attn_img1(x , img_feat, img_feat)
             x = self.layer_norm_img1(x_out + x) # b n c
@@ -187,19 +181,32 @@ class PCTransformer(nn.Module):
             x = x.transpose(0,1)
 
         # Process segmentation features if enabled
-        if hasattr(self.config, 'use_seg_features') and self.config.use_seg_features and cls_vec is not None:
+        if hasattr(self.config, 'use_seg_features') and self.config.use_seg_features and self.config.seg_before_enc and cls_vec is not None:
             norm_plt = points_normals.estimate_pointcloud_normals(coor, 30, disambiguate_directions=False)
             seg_emb, seg_idx = self.segmentator(coor.transpose(1, 2), norm_plt, cls_vec)
             seg_emb = seg_emb.transpose(1, 2).transpose(0, 1)
             seg_emb = self.get_better_seg_size(seg_emb)
-            x = x.transpose(0, 1)
 
-            # Segmentation feature attention
-            x, _ = self.cross_attn_seg(x, seg_emb, seg_emb)
-            x = self.layer_norm_seg(x)
-            x, _ = self.self_attn_seg(x, x, x)
-            x = self.layer_norm_seg2(x + x)
-            x = x.transpose(0, 1)
+            x = x.transpose(0,1)
+            # layer 1: cross + self attention
+            x_out, _ = self.cross_attn_seg1(x , seg_emb, seg_emb)
+            x = self.layer_norm_seg1(x_out + x) # b n c
+            
+            x_out, _ = self.self_attn_seg1(x, x, x)
+            x = self.layer_norm_seg2(x_out + x)
+            pc_skip = x
+            
+            # layer 2: cross + self attention
+            x_out, _ = self.cross_attn_seg2(x , seg_emb, seg_emb)
+            x = self.layer_norm_seg3(x_out + x) # b n c
+            
+            x_out, _ = self.self_attn_seg2(x, x, x)
+            x = self.layer_norm_seg4(x_out + x)
+            
+            x_out, _ = self.cross_attn_seg3(x, pc_skip, pc_skip)
+            x = self.layer_norm_seg5(x_out + x)
+            x = x.transpose(0,1)
+        # end seg block
 
         global_feature = self.increase_dim(x)  # B 1024 N
         global_feature = torch.max(global_feature, dim=1)[0]  # B 1024
@@ -215,84 +222,116 @@ class PCTransformer(nn.Module):
         idx = torch.argsort(query_ranking, dim=1, descending=True)  # b n 1
         coarse = torch.gather(coarse, 1, idx[:, :self.num_query].expand(-1, -1, coarse.size(-1)))
 
-        # Produce query
-        q = self.mlp_query(torch.cat([global_feature.unsqueeze(1).expand(-1, coarse.size(1), -1), coarse], dim=-1))  # b n c
 
-        # Forward decoder
-        q = self.decoder(q=q, v=mem, q_pos=coarse, v_pos=coor)
-
+        # I add from original
         if self.training:
-            
-            if self.config.enable_denoising:
-                picked_points = misc.fps(xyz, 64)
-                picked_points = misc.jitter_points(picked_points)
-                size_coarse_wo_denoise = coarse.shape[1]
-                coarse = torch.cat([coarse, picked_points], dim=1)  # B 256+64 3?
-                denoise_length = 64
+            # add denoise task
+            # first pick some point : 64?
+            picked_points = misc.fps(xyz, 64)
+            picked_points = misc.jitter_points(picked_points)
+            size_coarse_wo_denoise = coarse.shape[1]
+#             print(size_coarse_wo_denoise)
+            coarse = torch.cat([coarse, picked_points], dim=1) # B 256+64 3?
+            denoise_length = 64     
 
-                q = self.mlp_query(torch.cat([global_feature.unsqueeze(1).expand(-1, coarse.size(1), -1), coarse], dim=-1))
+            # produce query
+            q = self.mlp_query(
+            torch.cat([
+                global_feature.unsqueeze(1).expand(-1, coarse.size(1), -1),
+                coarse], dim = -1)) # b n c
 
-                q = self.decoder(q=q, v=mem, q_pos=coarse, v_pos=coor, denoise_length=denoise_length)
+            # forward decoder
+            q = self.decoder(q=q, v=mem, q_pos=coarse, v_pos=coor, denoise_length=denoise_length)
 
-            if self.config.enable_segmentation_enhancement:
-                norm_plt = points_normals.estimate_pointcloud_normals(coarse[:, :size_coarse_wo_denoise, :], 30, disambiguate_directions=False)
-                seg_emb, seg_idx = self.segmentator(coarse[:, :size_coarse_wo_denoise, :].transpose(1, 2), norm_plt, cls_vec)
+            if self.config.seg_before_dec and hasattr(self.config, 'use_seg_features') and self.config.use_seg_features and cls_vec is not None:
+            # add seg block
+                norm_plt = points_normals.estimate_pointcloud_normals(
+                    coarse[:,:size_coarse_wo_denoise,:],
+                    30,
+                    disambiguate_directions=False,
+    #               use_symeig_workaround=False,
+                )
+                seg_emb, seg_idx = self.segmentator(coarse[:,:size_coarse_wo_denoise,:].transpose(1, 2),
+                                                    norm_plt,
+                                                    cls_vec)
                 seg_emb = seg_emb.transpose(1, 2).transpose(0, 1)
-                seg_emb = self.get_better_seg_size2(seg_emb)
-
-                q = q.transpose(0, 1)
-
+                seg_emb = self.get_better_seg_size(seg_emb)
+        
+                q = q.transpose(0,1)
+    #             print('q_transpose.shape', q.shape)
+                # layer 1: cross + self attention
                 q_temp = q.clone()
                 q_temp = q_temp[:size_coarse_wo_denoise]
+    #             print('q_temp.shape', q_temp.shape)
+                
+                q_out, _ = self.cross_attn_seg1(q_temp , seg_emb, seg_emb)
+                q_temp = self.layer_norm_seg1(q_out + q_temp) # b n c
 
-                q_out, _ = self.cross_attn4(q_temp, seg_emb, seg_emb)
-                q_temp = self.layer_norm6(q_out + q_temp)
-
-                q_out, _ = self.self_attn3(q_temp, q_temp, q_temp)
-                q_temp = self.layer_norm7(q_out + q_temp)
+                q_out, _ = self.self_attn_seg1(q_temp, q_temp, q_temp)
+                q_temp = self.layer_norm_seg2(q_out + q_temp)
                 q_skip = q_temp
 
-                q_out, _ = self.cross_attn5(q_temp, seg_emb, seg_emb)
-                q_temp = self.layer_norm8(q_out + q_temp)
+                # layer 2: cross + self attention
+                q_out, _ = self.cross_attn_seg2(q_temp , seg_emb, seg_emb)
+                q_temp = self.layer_norm_seg3(q_out + q_temp) # b n c
 
-                q_out, _ = self.self_attn4(q_temp, q_temp, q_temp)
-                q_temp = self.layer_norm9(q_out + q_temp)
+                q_out, _ = self.self_attn_seg2(q_temp, q_temp, q_temp)
+                q_temp = self.layer_norm_seg4(q_out + q_temp)
 
-                q_out, _ = self.cross_attn6(q_temp, q_skip, q_skip)
-                q_temp = self.layer_norm10(q_out + q_temp)
-
+                q_out, _ = self.cross_attn_seg3(q_temp, q_skip, q_skip)
+                q_temp = self.layer_norm_seg5(q_out + q_temp)
+    #             print('q_temp_end.shape', q_temp.shape)
+    #             print('q_end.shape', q.shape)
                 q[:size_coarse_wo_denoise] = q_temp
-                q = q.transpose(0, 1)
+                q = q.transpose(0,1)
+                # end seg block
+            
+            return q, coarse, denoise_length
 
-            return q, coarse, denoise_length if self.config.enable_denoising else 0 
-                
+        else:
+            # produce query
+            q = self.mlp_query(
+            torch.cat([
+                global_feature.unsqueeze(1).expand(-1, coarse.size(1), -1),
+                coarse], dim = -1)) # b n c
+            
+            # forward decoder
+            q = self.decoder(q=q, v=mem, q_pos=coarse, v_pos=coor)
 
-        return q, coarse, None
+            # add seg block
+            if hasattr(self.config, 'use_seg_features') and self.config.use_seg_features and self.config.seg_before_dec and cls_vec is not None:
+                norm_plt = points_normals.estimate_pointcloud_normals(
+                    coarse,
+                    30,
+                    disambiguate_directions=False,
+    #               use_symeig_workaround=False,
+                )
+                seg_emb, seg_idx = self.segmentator(coarse.transpose(1, 2),
+                                                    norm_plt,
+                                                    cls_vec)
+                seg_emb = seg_emb.transpose(1, 2).transpose(0, 1)
+                seg_emb = self.get_better_seg_size(seg_emb)
+        
+                q = q.transpose(0,1)
+                # layer 1: cross + self attention
+                q_out, _ = self.cross_attn_seg1(q , seg_emb, seg_emb)
+                q = self.layer_norm_seg1(q_out + q) # b n c
 
+                q_out, _ = self.self_attn_seg1(q, q, q)
+                q = self.layer_norm_seg2(q_out + q)
+                q_skip = q
 
-class PCTransformerImgOnly(PCTransformer):
-    def __init__(self, config):
-        # Adjust config to enable image features
-        config.use_img_features = True
-        config.use_seg_features = False  # Ensure segmentation features are disabled
-        config.enable_denoising = 0
-        config.enable_segmentation_enhancement = False
-        super().__init__(config)
+                # layer 2: cross + self attention
+                q_out, _ = self.cross_attn_seg2(q , seg_emb, seg_emb)
+                q = self.layer_norm_seg3(q_out + q) # b n c
 
-class PCTransformerSegOnly(PCTransformer):
-    def __init__(self, config):
-        # Adjust config to enable segmentation features
-        config.use_img_features = False  # Ensure image features are disabled
-        config.use_seg_features = True
-        config.enable_denoising = True
-        config.enable_segmentation_enhancement = True
-        super().__init__(config)
+                q_out, _ = self.self_attn_seg2(q, q, q)
+                q = self.layer_norm_seg4(q_out + q)
 
-class PCTransformerImgSeg(PCTransformer):
-    def __init__(self, config):
-        # Adjust config to enable both image and segmentation features
-        config.use_img_features = True
-        config.use_seg_features = True
-        config.enable_denoising = True
-        config.enable_segmentation_enhancement = False
-        super().__init__(config)
+                q_out, _ = self.cross_attn_seg3(q, q_skip, q_skip)
+                q = self.layer_norm_seg5(q_out + q)
+
+                q = q.transpose(0,1)
+                # end seg block
+
+            return q, coarse, 0

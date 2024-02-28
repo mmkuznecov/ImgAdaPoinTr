@@ -21,7 +21,7 @@ from ..base_blocks import PointTransformerDecoderEntry, DGCNN_Grouper, Encoder
 from ..base_blocks import SimpleEncoder, Fold, SimpleRebuildFCLayer
 from ..base_blocks import CycleLR
 from ..image_encoders import ResNet18
-from .prtransformer import PCTransformer
+from .pctransformer import PCTransformer
 
 
 class PCTransformerImgSeg(PCTransformer):
@@ -31,6 +31,8 @@ class PCTransformerImgSeg(PCTransformer):
         config.use_seg_features = True
         config.enable_denoising = True
         config.enable_segmentation_enhancement = False
+        config.seg_before_enc = False
+        config.seg_before_dec = True
         super().__init__(config)
         
 STEP_SIZE = 5
