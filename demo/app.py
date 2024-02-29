@@ -2,25 +2,37 @@ import gradio as gr
 import os
 import sys
 import plotly.graph_objects as go
+from PIL import Image
+import torch
+from torchvision import transforms
 
+# Assuming utils and datasets are in the parent directory as before
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
-from utils.io_module import IO
 
-current_point_cloud = None
+# Assuming utils.io_module and simple_predictor are accessible from BASE_DIR
+from utils.io_module import IO  # Adjust import path as necessary
+from pcreconstructor import PCReconstructor, CLASSES  # Adjust import path as necessary
 
+current_class_id = None
 
-def visualize_point_cloud(file_path, uploaded_file):
-    global current_point_cloud
-    # Determine the source of the input
-    if uploaded_file is not None:
-        # Handle file uploaded from the user's computer
-        current_point_cloud = IO.get(uploaded_file)
-    else:
-        # Handle file selected from the dropdown
-        current_point_cloud = IO.get(file_path)
-    return create_plot(current_point_cloud)
+def load_and_preprocess_image(image_path, height=224, width=224):
+    image = Image.open(image_path).convert('RGB')
+    transform = transforms.Compose([
+        transforms.Resize((height, width)),
+        transforms.ToTensor(),
+    ])
+    image = transform(image).unsqueeze(0)  # Add batch dimension
+    return image
 
+def visualize_point_cloud(file_path):
+    global current_class_id
+    # Extract class_id from the file_path
+    class_id = file_path
+    current_class_id = class_id
+    point_cloud_path = os.path.join(BASE_DIR, 'demo', 'samples', class_id, '00.pcd')
+    point_cloud = IO.get(point_cloud_path)
+    return create_plot(point_cloud)
 
 def create_plot(point_cloud):
     if point_cloud is not None:
@@ -31,31 +43,48 @@ def create_plot(point_cloud):
             mode='markers',
             marker=dict(size=2)
         )])
+        fig.update_layout(margin=dict(l=0, r=0, b=0, t=0))
         return fig
     else:
         return None
 
+def reconstruct_point_cloud(model_name):
+    global current_class_id
+    point_cloud_path = os.path.join(BASE_DIR, 'demo', 'samples', current_class_id, '00.pcd')
+    image_path = os.path.join(BASE_DIR, 'demo', 'samples', current_class_id, '00.png')
 
-def reconstruct_point_cloud():
-    # Apply your reconstruction algorithm on current_point_cloud
-    return create_plot(current_point_cloud)
+    # Update predictor based on selected model
+    model_configs = {
+        'SegEncAdaPoinTr': ('cfgs/SegImgPCN_models/SegEncAdaPoinTr.yaml', 'pretrained/SegEncAdaPoinTr.pth'),
+        'ImgResNetEncAdaPoinTrVariableLoss': ('cfgs/ImgPCN_models/ImgResNetEncAdaPoinTrVariableLoss.yaml', 'pretrained/ImgAdaPoinTr.pth'),
+        'ImgEncSegDecAdaPoinTrVariableLoss': ('cfgs/SegImgPCN_models/ImgEncSegDecAdaPoinTrVariableLoss.yaml', 'pretrained/ImgEncSegDecAPTr.pth')
+    }
+    
+    use_segmentation = False if model_name == 'ImgResNetEncAdaPoinTrVariableLoss' else True
+    
+    config_path, ckpt_path = model_configs[model_name]
+    predictor = PCReconstructor(config_path, ckpt_path, use_segmentation=use_segmentation)
+    
+    reconstructed_points = predictor.predict(point_cloud_path, image_path, current_class_id, CLASSES)
+    return create_plot(reconstructed_points)
 
-
-# List of files in the 'samples' directory
 samples_dir = os.path.join(BASE_DIR, 'demo', 'samples')
-sample_files = ['Select from samples...'] + [f'samples/{file}' for file in os.listdir(samples_dir) if file.endswith('.ply')]
+sample_files = [class_id for class_id in os.listdir(samples_dir) if os.path.isdir(os.path.join(samples_dir, class_id))]
 
+# Gradio app setup
 with gr.Blocks() as app:
     gr.Markdown("## 3D Point Cloud Visualization and Reconstruction")
     with gr.Row():
-        file_dropdown = gr.Dropdown(label="Select a Sample Point Cloud File", choices=sample_files, value='Select from samples...')
-        file_uploader = gr.File(label="Or Upload Your File")
-        upload_btn = gr.Button("Load and Visualize")
+        file_dropdown = gr.Dropdown(label="Select a Sample Point Cloud File", choices=sample_files, value=sample_files[0])
+        model_selection = gr.Dropdown(label="Select a Model", choices=[
+            'SegEncAdaPoinTr', 'ImgResNetEncAdaPoinTrVariableLoss', 'ImgEncSegDecAdaPoinTrVariableLoss'
+        ], value='SegEncAdaPoinTr')
+        visualize_btn = gr.Button("Load and Visualize")
     original_pc_display = gr.Plot()
     reconstruct_btn = gr.Button("Reconstruct")
     reconstructed_pc_display = gr.Plot()
 
-    upload_btn.click(visualize_point_cloud, inputs=[file_dropdown, file_uploader], outputs=original_pc_display)
-    reconstruct_btn.click(reconstruct_point_cloud, inputs=[], outputs=reconstructed_pc_display)
+    visualize_btn.click(visualize_point_cloud, inputs=[file_dropdown], outputs=original_pc_display)
+    reconstruct_btn.click(reconstruct_point_cloud, inputs=[model_selection], outputs=reconstructed_pc_display)
 
-app.launch(share=True)
+app.launch(share=True, server_port=8080)
