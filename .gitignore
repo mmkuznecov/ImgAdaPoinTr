@@ -1,3 +1,10 @@
 __pycache__
 .ipynb_checkpoints
 .local
+gradio_cached_examples
+/pretrained
+/test_data
+/experiments
+build
+*egg-info
+dist

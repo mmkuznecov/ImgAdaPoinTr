@@ -23,18 +23,18 @@ bnmscheduler: {
 }}
 
 dataset : {
-  train : { _base_: cfgs/dataset_configs/ImgPCN.yaml, 
+  train : { _base_: cfgs/dataset_configs/SegImgPCN.yaml, 
             others: {subset: 'train'}},
-  val : { _base_: cfgs/dataset_configs/ImgPCN.yaml, 
+  val : { _base_: cfgs/dataset_configs/SegImgPCN.yaml, 
             others: {subset: 'val'}},
-  test : { _base_: cfgs/dataset_configs/ImgPCN.yaml, 
+  test : { _base_: cfgs/dataset_configs/SegImgPCN.yaml, 
             others: {subset: 'test'}}}
             
 model : {
-    NAME: ImgResNetEncAdaPoinTrVariableLoss, 
+    NAME: SegEncDecAdaPoinTr, 
     num_query: 512, 
     num_points: 16384,
-    center_num: [512, 256],
+    center_num: [512, 512],
     global_feature_dim: 1024, 
     encoder_type: graph,
     decoder_type: fc,
@@ -62,7 +62,7 @@ model : {
     }
 }
   
-total_bs : 1
+total_bs : 64
 step_per_update : 1
 max_epoch : 600
 

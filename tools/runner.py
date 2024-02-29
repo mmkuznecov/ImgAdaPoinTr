@@ -35,20 +35,11 @@ def run_net(args, config, train_writer=None, val_writer=None):
     base_model = builder.model_builder(config.model)
     print('config.model', config.model)
     print('args.local_rank', args.local_rank)
-    
-#     if args.use_pretrained_mt:
-#         print('use pretrained Modality Transfer')
-#         ckpt_path = '/home/jovyan/vchopuryan/PoinTr/pretrained/modality_transfer_last.pth'
-#         state_dict = torch.load(ckpt_path)
-#         base_ckpt = {k.replace("module.", ""): v for k, v in state_dict['model_state_dict'].items()}
-#         base_model.base_img_model.load_state_dict(base_ckpt)
-#         del base_ckpt
+
         
     if args.use_gpu:
         base_model.to(args.local_rank)
 
-    # from IPython import embed; embed()
-    # parameter setting
     start_epoch = 0
     best_metrics = None
     metrics = None
@@ -69,7 +60,7 @@ def run_net(args, config, train_writer=None, val_writer=None):
         new_state_dict = OrderedDict()
         for layer in state_dict:
             new_state_dict[layer.replace('module.', '')] = state_dict[layer]
-        base_model.base_model.segmentator.load_state_dict(new_state_dict)
+        base_model.base_model.segmentator.load_state_dict(new_state_dict, strict=False)
         for parameter in base_model.base_model.segmentator.parameters():
             parameter.requires_grad = False
         print('Finish load Segmentator weights')
@@ -322,7 +313,7 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
     category_metrics = dict()
     n_samples = len(test_dataloader) # bs is 1
 
-    interval =  n_samples // 10
+    interval =  n_samples // 1#0
     loss_L1 = []
     loss_L2 = []
 
@@ -424,7 +415,7 @@ def validate(base_model, test_dataloader, epoch, ChamferDisL1, ChamferDisL2, val
             torch.cuda.synchronize()
      
     # Print testing results
-    shapenet_dict = json.load(open('./data/shapenet_synset_dict.json', 'r'))
+    shapenet_dict = json.load(open('./cfgs/shapenet_synset_dict.json', 'r'))
     print_log('============================ TEST RESULTS ============================',logger=logger)
     msg = ''
     msg += 'Taxonomy\t'
@@ -687,7 +678,7 @@ def test(base_model, test_dataloader, ChamferDisL1, ChamferDisL2, args, config, 
         print_log('[TEST] Metrics = %s' % (['%.4f' % m for m in test_metrics.avg()]), logger=logger)
     
     # Print testing results
-    shapenet_dict = json.load(open('./data/shapenet_synset_dict.json', 'r'))
+    shapenet_dict = json.load(open('./cfgs/shapenet_synset_dict.json', 'r'))
     print_log('============================ TEST RESULTS ============================',logger=logger)
     msg = ''
     msg += 'Taxonomy\t'

@@ -13,5 +13,3 @@ def build_model_from_cfg(cfg, **kwargs):
         Dataset: a constructed dataset specified by dataset_name.
     """
     return MODELS.build(cfg, **kwargs)
-
-

@@ -13,7 +13,7 @@ sys.path.append(os.path.join(BASE_DIR, '../'))
 from tools import builder
 from utils.config import cfg_from_yaml_file
 from utils import misc
-from datasets.io import IO
+from utils.io_module import IO
 from datasets.data_transforms import Compose
 
 
