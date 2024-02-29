@@ -11,15 +11,7 @@ sys.path.append(BASE_DIR)
 
 from utils.config import get_config
 from tools.builder import model_builder, load_model
-from datasets.io_module import IO
-
-
-CLASSES = {
-        '02691156': 0, '02773838': 1, '02954340': 2, '02958343': 3, '03001627': 4,
-        '03261776': 5, '03467517': 6, '03624134': 7, '03636649': 8, '03642806': 9,
-        '03790512': 10, '03797390': 11, '03948459': 12, '04099429': 13,
-        '04225987': 14, '04379243': 15
-    }
+from utils.io_module import IO
 
 def load_and_preprocess_image(image_path, height=224, width=224):
     image = Image.open(image_path).convert('RGB')

@@ -1,25 +1,16 @@
-import time
-from functools import partial, reduce
-
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision import transforms, models
 from pytorch3d.ops import points_normals
-from timm.models.layers import DropPath, trunc_normal_
+from timm.models.layers import trunc_normal_
 
-from extensions.chamfer_dist import ChamferDistanceL1
-from ..build import MODELS, build_model_from_cfg
 from models.Transformer_utils import *
 from utils import misc
 from ..segmentation.GDANet_ptseg import GDANet
-from ..base_blocks import SelfAttnBlockApi, CrossAttnBlockApi, TransformerEncoder
-from ..base_blocks import TransformerDecoder, PointTransformerEncoder
-from ..base_blocks import PointTransformerDecoder, PointTransformerEncoderEntry
+from ..base_blocks import PointTransformerEncoderEntry
 from ..base_blocks import PointTransformerDecoderEntry, DGCNN_Grouper, Encoder
-from ..base_blocks import SimpleEncoder, Fold, SimpleRebuildFCLayer
-from ..base_blocks import CycleLR
+from ..base_blocks import SimpleEncoder
 from ..image_encoders import ResNet18
 
 

@@ -12,12 +12,7 @@ from timm.models.layers import DropPath, trunc_normal_
 from extensions.chamfer_dist import ChamferDistanceL1
 from ..build import MODELS, build_model_from_cfg
 from models.Transformer_utils import *
-from utils import misc
 from ..segmentation.GDANet_ptseg import GDANet
-from ..base_blocks import SelfAttnBlockApi, CrossAttnBlockApi, TransformerEncoder
-from ..base_blocks import TransformerDecoder, PointTransformerEncoder
-from ..base_blocks import PointTransformerDecoder, PointTransformerEncoderEntry
-from ..base_blocks import PointTransformerDecoderEntry, DGCNN_Grouper, Encoder
 from ..base_blocks import SimpleEncoder, Fold, SimpleRebuildFCLayer
 from ..base_blocks import CycleLR
 from ..image_encoders import ResNet18
@@ -74,7 +69,7 @@ class ImgEncSegDecAdaPoinTrVariableLoss(nn.Module):
         self.build_loss_func()
         
         self.alpha_loss = [scheduler_loss.get_lr(last_epoch=epoch) for epoch in range(STEP_SIZE, 600)]
-        print('self.alpha_loss:', self.alpha_loss)
+        # print('self.alpha_loss:', self.alpha_loss)
 
     def build_loss_func(self):
         self.loss_func = ChamferDistanceL1()

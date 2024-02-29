@@ -11,7 +11,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
 
 from utils.io_module import IO
-from pcreconstructor import PCReconstructor, CLASSES
+from pcreconstructor import PCReconstructor
+from datasets.SegImgPCNDataset import CLASSES
 
 current_class_id = None
 

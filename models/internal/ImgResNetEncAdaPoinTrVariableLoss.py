@@ -71,7 +71,7 @@ class ImgResNetEncAdaPoinTrVariableLoss(nn.Module):
         self.reduce_map = nn.Linear(self.trans_dim + 1027, self.trans_dim)
         self.build_loss_func()
         self.alpha_loss = [scheduler_loss.get_lr(last_epoch=epoch) for epoch in range(STEP_SIZE, 600)]
-        print('self.alpha_loss:', self.alpha_loss)
+        # print('self.alpha_loss:', self.alpha_loss)
 
     def build_loss_func(self):
         self.loss_func = ChamferDistanceL1()
