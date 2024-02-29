@@ -135,6 +135,16 @@ Test the ImgEncSegDecAPTr [pretrained model](https://sc.link/rSIt0):
 bash ./scripts/test.sh 0 --ckpts ./pretrained/ImgEncSegDecAPTr.pth --config ./cfgs/SegImgPCN_models/ImgEncSegDecAdaPoinTrVariableLoss.yaml  --exp_name test
 ```
 
+## Demo
+
+In [demo](/demo/) directory you can find code for [app](/demo/app.py) and example of [calling models from code](/demo/pcreconstructor.py)
+
+You can run demo via command:
+
+```bash
+python demo/app.py
+```
+
 
 ## Acknowledgements
 
