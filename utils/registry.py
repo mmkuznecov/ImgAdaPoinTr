@@ -284,7 +284,6 @@ def build_from_cfg(cfg, registry, default_args=None):
         raise TypeError(
             f'type must be a str or valid type, but got {type(obj_type)}')
     try:
-        print('cfg'* 50 , cfg)
         return obj_cls(cfg)
     except Exception as e:
         # Normal TypeError does not print class name.
